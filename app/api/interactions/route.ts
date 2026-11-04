@@ -39,10 +39,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Both entries are ${drugA.name}. Pick two different remedies.` }, { status: 400 });
   }
 
-  const [interactions, fda] = await Promise.all([
-    drugA && drugB ? findInteractions(pool, drugA, drugB) : Promise.resolve([]),
-    checkFdaLabels(fdaSubject(a, drugA), fdaSubject(b, drugB)),
-  ]);
+  const interactions = drugA && drugB ? await findInteractions(pool, drugA, drugB) : [];
+  // The live label search is a fallback for pairs the database knows nothing about.
+  const fda = interactions.length
+    ? { enabled: false, findings: [], checked: [] }
+    : await checkFdaLabels(fdaSubject(a, drugA), fdaSubject(b, drugB));
   const duplications = drugA && drugB ? findDuplications(drugA, drugB) : [];
 
   return NextResponse.json({

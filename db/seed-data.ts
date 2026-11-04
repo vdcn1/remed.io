@@ -3,24 +3,25 @@
 
 export type Severity = "minor" | "moderate" | "major" | "contraindicated";
 
-export const classes: { slug: string; name: string }[] = [
-  { slug: "nsaid", name: "NSAIDs" },
-  { slug: "ssri", name: "SSRIs" },
-  { slug: "maoi", name: "MAO inhibitors" },
-  { slug: "ace-inhibitor", name: "ACE inhibitors" },
-  { slug: "opioid", name: "Opioids" },
-  { slug: "benzodiazepine", name: "Benzodiazepines" },
-  { slug: "nitrate", name: "Nitrates" },
-  { slug: "pde5-inhibitor", name: "PDE5 inhibitors" },
-  { slug: "statin", name: "Statins" },
-  { slug: "anticoagulant", name: "Anticoagulants" },
-  { slug: "antiplatelet", name: "Antiplatelets" },
-  { slug: "ppi", name: "Proton pump inhibitors" },
-  { slug: "fluoroquinolone", name: "Fluoroquinolones" },
-  { slug: "macrolide", name: "Macrolide antibiotics" },
-  { slug: "azole-antifungal", name: "Azole antifungals" },
-  { slug: "beta-blocker", name: "Beta blockers" },
-  { slug: "potassium-sparing-diuretic", name: "Potassium-sparing diuretics" },
+// `aliases` include FDA EPC class names so imported drugs land in these classes.
+export const classes: { slug: string; name: string; aliases?: string[] }[] = [
+  { slug: "nsaid", name: "NSAIDs", aliases: ["NSAID", "Nonsteroidal anti-inflammatory drugs", "Non-steroidal anti-inflammatory drugs", "Nonsteroidal Anti-inflammatory Drug"] },
+  { slug: "ssri", name: "Serotonin reuptake inhibitors (incl. SSRIs)", aliases: ["SSRIs", "SSRI", "Selective serotonin reuptake inhibitors", "Serotonin Reuptake Inhibitor"] },
+  { slug: "maoi", name: "MAO inhibitors", aliases: ["MAOIs", "Monoamine oxidase inhibitors", "Monoamine Oxidase Inhibitor"] },
+  { slug: "ace-inhibitor", name: "ACE inhibitors", aliases: ["Angiotensin converting enzyme inhibitors", "Angiotensin-converting enzyme inhibitors", "Angiotensin Converting Enzyme Inhibitor"] },
+  { slug: "opioid", name: "Opioids", aliases: ["Opioid analgesics", "Opioid agonists", "Opioid Agonist", "Partial Opioid Agonist"] },
+  { slug: "benzodiazepine", name: "Benzodiazepines", aliases: ["Benzodiazepine"] },
+  { slug: "nitrate", name: "Nitrates", aliases: ["Organic nitrates", "Nitrate Vasodilator", "Nitric oxide donors"] },
+  { slug: "pde5-inhibitor", name: "PDE5 inhibitors", aliases: ["Phosphodiesterase 5 inhibitors", "Phosphodiesterase-5 inhibitors", "Phosphodiesterase type 5 inhibitors", "PDE-5 inhibitors", "Phosphodiesterase 5 Inhibitor"] },
+  { slug: "statin", name: "Statins", aliases: ["HMG-CoA reductase inhibitors", "HMG-CoA Reductase Inhibitor"] },
+  { slug: "anticoagulant", name: "Anticoagulants", aliases: ["Oral anticoagulants", "Vitamin K Antagonist", "Factor Xa Inhibitor", "Direct Thrombin Inhibitor"] },
+  { slug: "antiplatelet", name: "Antiplatelets", aliases: ["Antiplatelet agents", "Antiplatelet drugs", "Platelet aggregation inhibitors", "Platelet Aggregation Inhibitor", "P2Y12 Platelet Inhibitor"] },
+  { slug: "ppi", name: "Proton pump inhibitors", aliases: ["PPIs", "Proton pump inhibitors", "Proton Pump Inhibitor"] },
+  { slug: "fluoroquinolone", name: "Fluoroquinolones", aliases: ["Quinolones", "Quinolone antibiotics", "Fluoroquinolone Antibacterial", "Quinolone Antimicrobial"] },
+  { slug: "macrolide", name: "Macrolide antibiotics", aliases: ["Macrolides", "Macrolide Antimicrobial", "Macrolide Antibacterial"] },
+  { slug: "azole-antifungal", name: "Azole antifungals", aliases: ["Azoles", "Azole Antifungal"] },
+  { slug: "beta-blocker", name: "Beta blockers", aliases: ["Beta-blockers", "Beta-adrenergic blockers", "Beta-adrenergic blocking agents", "beta-Adrenergic Blocker"] },
+  { slug: "potassium-sparing-diuretic", name: "Potassium-sparing diuretics", aliases: ["Aldosterone antagonists", "Aldosterone Antagonist", "Potassium-sparing Diuretic", "Mineralocorticoid receptor antagonists"] },
 ];
 
 export const drugs: {
@@ -68,7 +69,7 @@ export const drugs: {
   { slug: "fluconazole", name: "Fluconazole", classes: ["azole-antifungal"], aliases: ["Diflucan"] },
   { slug: "methotrexate", name: "Methotrexate", aliases: ["Trexall", "Otrexup"] },
   { slug: "trimethoprim-sulfamethoxazole", name: "Trimethoprim/sulfamethoxazole", aliases: ["Bactrim", "Septra", "Co-trimoxazole"] },
-  { slug: "lithium", name: "Lithium", aliases: ["Lithobid"] },
+  { slug: "lithium", name: "Lithium", aliases: ["Lithobid", "Lithium carbonate"] },
   { slug: "digoxin", name: "Digoxin", aliases: ["Lanoxin"] },
   { slug: "amiodarone", name: "Amiodarone", aliases: ["Cordarone", "Pacerone"] },
   { slug: "metoprolol", name: "Metoprolol", classes: ["beta-blocker"], aliases: ["Lopressor", "Toprol XL"] },

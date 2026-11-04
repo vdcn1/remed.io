@@ -8,13 +8,19 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "db:up": "docker compose up -d db",
-    "db:setup": "tsx scripts/db-setup.ts"
+    "db:setup": "tsx scripts/db-setup.ts",
+    "ingest:labels": "tsx scripts/ingest/fda-labels.ts",
+    "ingest:drugs": "tsx scripts/ingest/load-drugs.ts",
+    "extract": "tsx scripts/extract.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.4.0",
     "next": "^16.4.5",
     "pg": "^8.23.1",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "stream-json": "^3.8.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",

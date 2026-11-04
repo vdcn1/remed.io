@@ -154,7 +154,14 @@ function ResultView({ result }: { result: CheckResult }) {
 
       {result.interactions.map((i) => (
         <article key={i.id} className="card">
-          <span className={`badge tone-${i.severity}`}>{i.severity}</span>
+          <div className="badges">
+            <span className={`badge tone-${i.severity}`}>{i.severity}</span>
+            {i.reviewStatus !== "reviewed" && (
+              <span className="badge tone-unknown" title="No doctor or pharmacist has checked this entry">
+                not reviewed
+              </span>
+            )}
+          </div>
           <h3>{i.summary}</h3>
           {i.matchedVia.length > 0 && <p className="via">Applies because {i.matchedVia.join(" and ")}.</p>}
           {i.mechanism && (
@@ -167,7 +174,28 @@ function ResultView({ result }: { result: CheckResult }) {
               <strong>What to do:</strong> {i.recommendation}
             </p>
           )}
-          <p className="source">Source: {i.source.name}</p>
+          {i.evidence && (
+            <blockquote className="evidence">
+              “{i.evidence}”
+            </blockquote>
+          )}
+          <p className="source">
+            {i.extractedBy ? (
+              <>
+                AI-extracted from the {i.labelOf ?? "FDA"} label
+                {i.source.ref && (
+                  <>
+                    {" · "}
+                    <a href={i.source.ref} target="_blank" rel="noreferrer">
+                      DailyMed
+                    </a>
+                  </>
+                )}
+              </>
+            ) : (
+              <>Source: {i.source.name}</>
+            )}
+          </p>
         </article>
       ))}
 

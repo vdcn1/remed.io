@@ -1,4 +1,5 @@
 import type { Queryable } from "../lib/db";
+import { classNorm } from "../lib/normalize";
 import { classes, drugs, interactions } from "./seed-data";
 
 export async function seed(db: Queryable) {
@@ -19,6 +20,13 @@ export async function seed(db: Queryable) {
       [c.slug, c.name],
     );
     classIds.set(c.slug, rows[0].id);
+    for (const alias of [c.name, c.slug, ...(c.aliases ?? [])]) {
+      await db.query(
+        `INSERT INTO drug_class_aliases (class_id, alias, norm) VALUES ($1, $2, $3)
+         ON CONFLICT (norm) DO UPDATE SET class_id = EXCLUDED.class_id, alias = EXCLUDED.alias`,
+        [rows[0].id, alias, classNorm(alias)],
+      );
+    }
   }
 
   const drugIds = new Map<string, number>();

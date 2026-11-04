@@ -16,8 +16,10 @@ export default function Home() {
       <Checker />
 
       <footer className="disclaimer">
-        remed.io is an informational tool and does not replace advice from a doctor or pharmacist. Absence of a
-        result does not mean a combination is safe. Label excerpts come from the{" "}
+        remed.io is a personal project and does not replace advice from a doctor or pharmacist. Most entries are
+        extracted from FDA drug labels by an AI model and have <strong>not been reviewed</strong> by a clinician; each
+        one links to the label text it came from. Absence of a result does not mean a combination is safe. Label data
+        comes from the{" "}
         <a href="https://open.fda.gov/apis/drug/label/" target="_blank" rel="noreferrer">
           openFDA drug label API
         </a>

@@ -23,6 +23,13 @@ export type Interaction = {
   mechanism: string | null;
   recommendation: string | null;
   source: { name: string; kind: string; ref: string | null };
+  reviewStatus: "unreviewed" | "reviewed";
+  /** Verbatim quote from the source document (AI-extracted rows). */
+  evidence: string | null;
+  /** Model that extracted this row; null for hand-curated rows. */
+  extractedBy: string | null;
+  /** Drug whose label this row was extracted from. */
+  labelOf: string | null;
   /** Human-readable explanation of why this rule matched, e.g. "Ibuprofen is one of the NSAIDs". */
   matchedVia: string[];
 };
@@ -85,6 +92,10 @@ type InteractionRow = {
   source_ref: string | null;
   source_name: string;
   source_kind: string;
+  review_status: "unreviewed" | "reviewed";
+  evidence_excerpt: string | null;
+  extracted_by: string | null;
+  label_of: string | null;
   a_drug_id: number | null;
   a_class_id: number | null;
   b_drug_id: number | null;
@@ -98,11 +109,15 @@ export async function findInteractions(db: Queryable, a: Drug, b: Drug): Promise
   const { rows } = await db.query<InteractionRow>(
     `SELECT i.id, i.severity, i.summary, i.mechanism, i.recommendation, i.source_ref,
             i.a_drug_id, i.a_class_id, i.b_drug_id, i.b_class_id,
-            s.name AS source_name, s.kind AS source_kind
-     FROM interactions i JOIN sources s ON s.id = i.source_id
-     WHERE ((i.a_drug_id = $1 OR i.a_class_id = ANY($2::int[])) AND (i.b_drug_id = $3 OR i.b_class_id = ANY($4::int[])))
-        OR ((i.a_drug_id = $3 OR i.a_class_id = ANY($4::int[])) AND (i.b_drug_id = $1 OR i.b_class_id = ANY($2::int[])))
-     ORDER BY i.severity DESC, i.id`,
+            i.review_status, i.evidence_excerpt, i.extracted_by,
+            s.name AS source_name, s.kind AS source_kind, ld.name AS label_of
+     FROM interactions i
+     JOIN sources s ON s.id = i.source_id
+     LEFT JOIN raw_documents rd ON rd.id = i.raw_document_id
+     LEFT JOIN drugs ld ON ld.id = rd.drug_id
+     WHERE i.review_status <> 'rejected' AND (((i.a_drug_id = $1 OR i.a_class_id = ANY($2::int[])) AND (i.b_drug_id = $3 OR i.b_class_id = ANY($4::int[])))
+        OR ((i.a_drug_id = $3 OR i.a_class_id = ANY($4::int[])) AND (i.b_drug_id = $1 OR i.b_class_id = ANY($2::int[]))))
+     ORDER BY i.severity DESC, (i.extracted_by IS NULL) DESC, i.id`,
     [a.id, aClassIds, b.id, bClassIds],
   );
 
@@ -128,6 +143,10 @@ export async function findInteractions(db: Queryable, a: Drug, b: Drug): Promise
       mechanism: r.mechanism,
       recommendation: r.recommendation,
       source: { name: r.source_name, kind: r.source_kind, ref: r.source_ref },
+      reviewStatus: r.review_status,
+      evidence: r.evidence_excerpt,
+      extractedBy: r.extracted_by,
+      labelOf: r.label_of,
       matchedVia,
     };
   });

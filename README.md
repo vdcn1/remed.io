@@ -40,18 +40,59 @@ npm run dev                     # http://localhost:3000
 | `drug_aliases`       | brand names & synonyms, unique case-insensitively                    |
 | `drug_classes`       | NSAIDs, SSRIs, …                                                      |
 | `drug_class_members` | drug ↔ class                                                          |
-| `interactions`       | subject A ↔ subject B (each a drug *or* a class), severity, summary, mechanism, recommendation, `source_id`, `source_ref` |
+| `drug_class_aliases` | normalised alternative names for classes, used for matching       |
+| `interactions`       | subject A ↔ subject B (each a drug *or* a class), severity, summary, mechanism, recommendation, source, evidence quote, `review_status` |
+| `raw_documents`      | source documents as fetched (one FDA label per ingredient)          |
+| `extractions`        | one LLM run per document: model, batch id, raw output, token usage  |
 
 Severity is a Postgres enum ordered `minor < moderate < major < contraindicated`.
 
-### Adding scraped data later
+## Importing data
 
-The schema is ready for imported data: create a `sources` row (kind `scraped` or `api`), upsert drugs
-keyed by `rxcui`, and insert interactions with that `source_id` and a `source_ref` URL/ID per row.
-Curated rows live under the `curated` source and are the only ones `db:setup` rewrites.
+The starter set covers 49 remedies. The import pipeline grows that to ~1,500 ingredients and
+extracts interactions from official FDA labels. All sources are public domain.
+
+```bash
+# 1. Download the openFDA drug label bulk files (~1.8 GB, 14 zips)
+mkdir -p data/raw/labels && cd data/raw/labels
+curl -s https://api.fda.gov/download.json \
+  | node -e 'for (const p of JSON.parse(require("fs").readFileSync(0)).results.drug.label.partitions) console.log(p.file)' \
+  | xargs -n1 -P4 curl -sSfO
+cd -
+
+npm run ingest:labels   # 2. best label per substance -> data/raw/labels.ndjson   (~3 min, offline)
+npm run ingest:drugs    # 3. RxNorm ingredients, brands, FDA classes, label text -> Postgres (~2 min)
+
+# 4. Extract interactions with Claude (needs ANTHROPIC_API_KEY in .env.local)
+npm run extract -- estimate                       # cost estimate, no API calls
+npm run extract -- direct --only=warfarin,sertraline   # small pilot, results immediately
+npm run extract -- submit                         # everything else as a Message Batch (half price)
+npm run extract -- collect                        # later: store the batch results
+npm run extract -- resolve                        # re-match stored outputs after alias changes (free)
+```
+
+How it fits together:
+
+1. **Labels:** about 263k labels collapse to one label per active substance. Prescription labels are
+   preferred, then labels that have a *Drug interactions* section, then the newest.
+2. **Drugs:** each substance is mapped to its RxNorm ingredient ("sertraline hydrochloride" →
+   sertraline). Brand names come from prescription labels, and classes from FDA Established
+   Pharmacologic Classes via RxClass. EPC names that match a curated class (e.g. "Nonsteroidal
+   Anti-inflammatory Drug") join it, so curated class-wide rules cover the imported drugs.
+3. **Extraction:** Claude reads each label's interaction sections and returns structured entries,
+   each with a verbatim supporting quote. Then:
+   - Entries whose quote isn't found in the label text are dropped.
+   - Names are matched to drugs, aliases and classes.
+   - A group the label names with examples ("strong CYP3A4 inhibitors, e.g. ketoconazole…")
+     becomes a `label-mention` class with those drugs as members.
+   - Raw model output is kept in `extractions`, so `resolve` can re-run matching without new API calls.
+
+Every interaction (curated or extracted) has `review_status = 'unreviewed'`, and the UI says so.
+Set it to `reviewed` or `rejected` if someone qualified ever checks entries; rejected rows are
+hidden.
 
 ## Disclaimer
 
-The bundled dataset is a small, hand-picked starter set of well-established interactions so the
-app is usable; it is **not** a complete clinical reference. remed.io is informational and does
-not replace a doctor or pharmacist.
+remed.io is a personal/portfolio project. Its data is not reviewed by a clinician: the starter set is
+hand-written and the imported interactions are AI-extracted from FDA labels. It is not a clinical
+reference and does not replace a doctor or pharmacist.
