@@ -17,8 +17,8 @@ export default function Home() {
 
       <footer className="disclaimer">
         remed.io is a personal project and does not replace advice from a doctor or pharmacist. Most entries are
-        extracted from FDA drug labels by an AI model and have <strong>not been reviewed</strong> by a clinician; each
-        one links to the label text it came from. Absence of a result does not mean a combination is safe. Label data
+        found by automatic text matching in FDA drug labels and have <strong>not been reviewed</strong> by a clinician;
+        each one quotes the label sentence it came from. Absence of a result does not mean a combination is safe. Label data
         comes from the{" "}
         <a href="https://open.fda.gov/apis/drug/label/" target="_blank" rel="noreferrer">
           openFDA drug label API

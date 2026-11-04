@@ -103,28 +103,13 @@ CREATE TABLE IF NOT EXISTS raw_documents (
 );
 CREATE INDEX IF NOT EXISTS raw_documents_drug_idx ON raw_documents (drug_id);
 
--- One LLM extraction per document per run. The raw model output is kept so the
--- name-resolution step can be re-run for free.
-CREATE TABLE IF NOT EXISTS extractions (
-  id               SERIAL PRIMARY KEY,
-  raw_document_id  INT NOT NULL REFERENCES raw_documents(id) ON DELETE CASCADE,
-  content_hash     TEXT NOT NULL,            -- hash of the document version that was extracted
-  model            TEXT NOT NULL,
-  batch_id         TEXT,                     -- Message Batches id, NULL for direct calls
-  status           TEXT NOT NULL CHECK (status IN ('pending', 'succeeded', 'failed')),
-  error            TEXT,
-  output           JSONB,
-  usage            JSONB,
-  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
-  finished_at      TIMESTAMPTZ
-);
-CREATE INDEX IF NOT EXISTS extractions_doc_idx ON extractions (raw_document_id);
-CREATE INDEX IF NOT EXISTS extractions_batch_idx ON extractions (batch_id);
+DROP TABLE IF EXISTS extractions;  -- from an earlier LLM-based design
+
 
 ALTER TABLE interactions ADD COLUMN IF NOT EXISTS review_status TEXT NOT NULL DEFAULT 'unreviewed'
   CHECK (review_status IN ('unreviewed', 'reviewed', 'rejected'));
 ALTER TABLE interactions ADD COLUMN IF NOT EXISTS evidence_excerpt TEXT;
-ALTER TABLE interactions ADD COLUMN IF NOT EXISTS extracted_by TEXT;   -- model id, NULL for hand-curated rows
+ALTER TABLE interactions ADD COLUMN IF NOT EXISTS extracted_by TEXT;   -- matcher version (e.g. 'text-match-v1'), NULL for hand-curated rows
 ALTER TABLE interactions ADD COLUMN IF NOT EXISTS raw_document_id INT REFERENCES raw_documents(id) ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS interactions_raw_doc_idx ON interactions (raw_document_id);
 

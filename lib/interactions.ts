@@ -24,11 +24,11 @@ export type Interaction = {
   recommendation: string | null;
   source: { name: string; kind: string; ref: string | null };
   reviewStatus: "unreviewed" | "reviewed";
-  /** Verbatim quote from the source document (AI-extracted rows). */
+  /** Verbatim sentence from the source label (text-matched rows). */
   evidence: string | null;
-  /** Model that extracted this row; null for hand-curated rows. */
+  /** Matcher version that produced this row (e.g. "text-match-v1"); null for hand-curated rows. */
   extractedBy: string | null;
-  /** Drug whose label this row was extracted from. */
+  /** Drug whose label this row was found in. */
   labelOf: string | null;
   /** Human-readable explanation of why this rule matched, e.g. "Ibuprofen is one of the NSAIDs". */
   matchedVia: string[];
@@ -77,8 +77,12 @@ export async function resolveDrug(db: Queryable, input: string): Promise<Drug | 
     `${DRUG_SELECT}
      WHERE d.slug = $1 OR lower(d.name) = $1
         OR d.id IN (SELECT drug_id FROM drug_aliases WHERE lower(alias) = $1)
+        -- fall back to ignoring punctuation and spaces: "st johns wort" = "St. John's Wort"
+        OR regexp_replace(lower(d.name), '[^a-z0-9]', '', 'g') = $2
+        OR d.id IN (SELECT drug_id FROM drug_aliases WHERE regexp_replace(lower(alias), '[^a-z0-9]', '', 'g') = $2)
+     ORDER BY (d.slug = $1 OR lower(d.name) = $1) DESC
      LIMIT 1`,
-    [term],
+    [term, term.replace(/[^a-z0-9]/g, "")],
   );
   return rows[0] ?? null;
 }
@@ -127,7 +131,13 @@ export async function findInteractions(db: Queryable, a: Drug, b: Drug): Promise
     return cls ? `${drug.name} is one of the ${cls.name}` : null;
   };
 
-  return rows.map((r) => {
+  const seenLabels = new Set<string>();
+  return rows.flatMap((r) => {
+    // One row per source label: the most severe (rows are ordered by severity).
+    if (r.label_of) {
+      if (seenLabels.has(r.label_of)) return [];
+      seenLabels.add(r.label_of);
+    }
     // Work out which side of the rule each input drug landed on.
     const aOnLeft = r.a_drug_id === a.id || (r.a_class_id != null && aClassIds.includes(r.a_class_id));
     const bOnRight = r.b_drug_id === b.id || (r.b_class_id != null && bClassIds.includes(r.b_class_id));
@@ -136,7 +146,7 @@ export async function findInteractions(db: Queryable, a: Drug, b: Drug): Promise
       via(a, straight ? r.a_class_id : r.b_class_id),
       via(b, straight ? r.b_class_id : r.a_class_id),
     ].filter((x): x is string => x !== null);
-    return {
+    return [{
       id: r.id,
       severity: r.severity,
       summary: r.summary,
@@ -148,7 +158,7 @@ export async function findInteractions(db: Queryable, a: Drug, b: Drug): Promise
       extractedBy: r.extracted_by,
       labelOf: r.label_of,
       matchedVia,
-    };
+    }];
   });
 }
 

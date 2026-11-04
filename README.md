@@ -43,7 +43,6 @@ npm run dev                     # http://localhost:3000
 | `drug_class_aliases` | normalised alternative names for classes, used for matching       |
 | `interactions`       | subject A ↔ subject B (each a drug *or* a class), severity, summary, mechanism, recommendation, source, evidence quote, `review_status` |
 | `raw_documents`      | source documents as fetched (one FDA label per ingredient)          |
-| `extractions`        | one LLM run per document: model, batch id, raw output, token usage  |
 
 Severity is a Postgres enum ordered `minor < moderate < major < contraindicated`.
 
@@ -63,12 +62,7 @@ cd -
 npm run ingest:labels   # 2. best label per substance -> data/raw/labels.ndjson   (~3 min, offline)
 npm run ingest:drugs    # 3. RxNorm ingredients, brands, FDA classes, label text -> Postgres (~2 min)
 
-# 4. Extract interactions with Claude (needs ANTHROPIC_API_KEY in .env.local)
-npm run extract -- estimate                       # cost estimate, no API calls
-npm run extract -- direct --only=warfarin,sertraline   # small pilot, results immediately
-npm run extract -- submit                         # everything else as a Message Batch (half price)
-npm run extract -- collect                        # later: store the batch results
-npm run extract -- resolve                        # re-match stored outputs after alias changes (free)
+npm run match           # 4. find interactions in the label text by word matching (~15 s, offline)
 ```
 
 How it fits together:
@@ -79,13 +73,18 @@ How it fits together:
    sertraline). Brand names come from prescription labels, and classes from FDA Established
    Pharmacologic Classes via RxClass. EPC names that match a curated class (e.g. "Nonsteroidal
    Anti-inflammatory Drug") join it, so curated class-wide rules cover the imported drugs.
-3. **Extraction:** Claude reads each label's interaction sections and returns structured entries,
-   each with a verbatim supporting quote. Then:
-   - Entries whose quote isn't found in the label text are dropped.
-   - Names are matched to drugs, aliases and classes.
-   - A group the label names with examples ("strong CYP3A4 inhibitors, e.g. ketoconazole…")
-     becomes a `label-mention` class with those drugs as members.
-   - Raw model output is kept in `extractions`, so `resolve` can re-run matching without new API calls.
+3. **Matching (no AI):** every drug name, salt form, brand name and class name goes into a hash
+   map keyed by its normalised words ("St. John's Wort" → `st john wort`). Each label sentence is
+   scanned word by word (case-insensitive, longest phrase first) and looked up in the map.
+   - A sentence that mentions another drug or class is graded by keywords: "contraindicated" / "do
+     not use" → contraindicated; "avoid", or serious harms (bleeding, serotonin syndrome, QT…) →
+     major; "monitor", "adjust", "dose" → moderate.
+   - Negative statements ("no clinically significant interaction") and allergy wording are skipped.
+   - The drug's own classes are skipped unless the label says "other NSAIDs".
+   - Each row stores the sentence it came from, and the UI shows it.
+
+   Checked against the 33 curated interactions: 30 are found independently. The misses are
+   "calcium" (ignored as too ambiguous) and combination products (their labels aren't imported yet).
 
 Every interaction (curated or extracted) has `review_status = 'unreviewed'`, and the UI says so.
 Set it to `reviewed` or `rejected` if someone qualified ever checks entries; rejected rows are
@@ -94,5 +93,5 @@ hidden.
 ## Disclaimer
 
 remed.io is a personal/portfolio project. Its data is not reviewed by a clinician: the starter set is
-hand-written and the imported interactions are AI-extracted from FDA labels. It is not a clinical
+hand-written and the imported interactions come from automatic text matching on FDA labels. It is not a clinical
 reference and does not replace a doctor or pharmacist.

@@ -79,6 +79,7 @@ export const drugs: {
   { slug: "ethinyl-estradiol", name: "Combined oral contraceptive", aliases: ["Ethinyl estradiol", "The pill"] },
   { slug: "st-johns-wort", name: "St. John's Wort", kind: "supplement", aliases: ["Hypericum perforatum"] },
   { slug: "ginkgo-biloba", name: "Ginkgo biloba", kind: "supplement", aliases: ["Ginkgo"] },
+  { slug: "ethanol", name: "Alcohol", kind: "food", aliases: ["Ethanol", "Alcoholic beverages", "Ethyl alcohol"] },
   { slug: "grapefruit-juice", name: "Grapefruit juice", kind: "food", aliases: ["Grapefruit"] },
 ];
 

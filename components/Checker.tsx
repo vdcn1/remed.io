@@ -182,7 +182,7 @@ function ResultView({ result }: { result: CheckResult }) {
           <p className="source">
             {i.extractedBy ? (
               <>
-                AI-extracted from the {i.labelOf ?? "FDA"} label
+                Found by text matching in the {i.labelOf ?? "FDA"} label
                 {i.source.ref && (
                   <>
                     {" · "}

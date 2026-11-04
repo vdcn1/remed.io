@@ -11,16 +11,14 @@
     "db:setup": "tsx scripts/db-setup.ts",
     "ingest:labels": "tsx scripts/ingest/fda-labels.ts",
     "ingest:drugs": "tsx scripts/ingest/load-drugs.ts",
-    "extract": "tsx scripts/extract.ts"
+    "match": "tsx scripts/match.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^1.4.0",
     "next": "^16.4.5",
     "pg": "^8.23.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "stream-json": "^3.8.0",
-    "zod": "^4.6.7"
+    "stream-json": "^3.8.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
