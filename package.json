@@ -11,7 +11,8 @@
     "db:setup": "tsx scripts/db-setup.ts",
     "ingest:labels": "tsx scripts/ingest/fda-labels.ts",
     "ingest:drugs": "tsx scripts/ingest/load-drugs.ts",
-    "match": "tsx scripts/match.ts"
+    "match": "tsx scripts/match.ts",
+    "bench:match": "tsx scripts/bench-match.ts"
   },
   "dependencies": {
     "next": "^16.4.5",

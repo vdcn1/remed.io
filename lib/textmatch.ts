@@ -2,8 +2,9 @@
 //
 // 1. A lexicon (hash map) is built from every drug name, alias and class name in the
 //    database. Keys are normalised word sequences ("st john wort", "nsaid").
-// 2. Each label section is split into sentences and words. Every run of 1..N words is
-//    looked up in the map (case-insensitive, longest match wins).
+// 2. Each label section is split into sentences and words. The lexicon is compiled into an
+//    Aho-Corasick automaton over words. One pass per sentence reports every lexicon phrase
+//    that occurs, and the longest non-overlapping match at each position wins.
 // 3. A sentence that mentions another drug/class is graded with keyword rules
 //    ("contraindicated", "avoid", "monitor", …) to give a severity.
 
@@ -40,7 +41,84 @@ function loadDictionary(): Set<string> {
   return new Set();
 }
 
-export type Lexicon = { map: Map<string, Target>; maxWords: number };
+export type Lexicon = { map: Map<string, Target>; maxWords: number; automaton?: Automaton };
+
+// ─── Aho-Corasick over words ───────────────────────────────────────────────────
+
+/**
+ * Trie over word sequences with failure links (Aho & Corasick, 1975). The alphabet is
+ * whole words, so a phrase can only match on word boundaries, as the old lookup did.
+ */
+export type Automaton = {
+  children: Map<string, number>[];
+  fail: Int32Array; // failure link: longest proper suffix that is also a trie node
+  dict: Int32Array; // nearest terminal node on the failure chain (-1 if none)
+  len: Int32Array; // phrase length in words
+  term: (Target | null)[]; // target for phrases that end at this node
+};
+
+export function buildAutomaton(map: Map<string, Target>): Automaton {
+  const children: Map<string, number>[] = [new Map()];
+  const lens: number[] = [0];
+  const term: (Target | null)[] = [null];
+  for (const [key, target] of map) {
+    let node = 0;
+    for (const w of key.split(" ")) {
+      let next = children[node].get(w);
+      if (next === undefined) {
+        next = children.length;
+        children.push(new Map());
+        lens.push(lens[node] + 1);
+        term.push(null);
+        children[node].set(w, next);
+      }
+      node = next;
+    }
+    term[node] = target;
+  }
+
+  const n = children.length;
+  const fail = new Int32Array(n);
+  const dict = new Int32Array(n).fill(-1);
+  const len = Int32Array.from(lens);
+
+  // Breadth-first so each node's failure link is computed after its ancestors'.
+  const queue: number[] = [...children[0].values()];
+  for (let qi = 0; qi < queue.length; qi++) {
+    const u = queue[qi];
+    for (const [w, v] of children[u]) {
+      let f = fail[u];
+      while (f !== 0 && !children[f].has(w)) f = fail[f];
+      fail[v] = children[f].get(w) ?? 0;
+      dict[v] = term[fail[v]] ? fail[v] : dict[fail[v]];
+      queue.push(v);
+    }
+  }
+  return { children, fail, dict, len, term };
+}
+
+/** Phrases ending at each word, reduced to the longest phrase starting at each word. */
+function longestStartingAt(words: string[], ac: Automaton): { bestLen: Int32Array; bestNode: Int32Array } {
+  const bestLen = new Int32Array(words.length);
+  const bestNode = new Int32Array(words.length);
+  let state = 0;
+  for (let e = 0; e < words.length; e++) {
+    const w = words[e];
+    while (state !== 0 && !ac.children[state].has(w)) state = ac.fail[state];
+    state = ac.children[state].get(w) ?? 0;
+    let t = ac.term[state] ? state : ac.dict[state];
+    while (t !== -1) {
+      const L = ac.len[t];
+      const start = e - L + 1;
+      if (L > bestLen[start]) {
+        bestLen[start] = L;
+        bestNode[start] = t;
+      }
+      t = ac.dict[t];
+    }
+  }
+  return { bestLen, bestNode };
+}
 
 export async function buildLexicon(db: Queryable): Promise<Lexicon> {
   const dictionary = loadDictionary();
@@ -86,7 +164,7 @@ export async function buildLexicon(db: Queryable): Promise<Lexicon> {
 
   let maxWords = 1;
   for (const key of map.keys()) maxWords = Math.max(maxWords, key.split(" ").length);
-  return { map, maxWords };
+  return { map, maxWords, automaton: buildAutomaton(map) };
 }
 
 // ─── Scanning ──────────────────────────────────────────────────────────────────
@@ -103,22 +181,24 @@ export function sentences(text: string): string[] {
 
 export type Mention = { target: Target; precededByOther: boolean };
 
-/** All lexicon entries mentioned in a sentence, longest match first at each position. */
+/**
+ * All lexicon entries mentioned in a sentence. Scans left to right; at each word the longest
+ * phrase starting there is taken and scanning resumes after it.
+ */
 export function findMentions(sentence: string, lex: Lexicon): Mention[] {
   const words = classNorm(sentence).split(" ").filter(Boolean);
+  const ac = lex.automaton ?? (lex.automaton = buildAutomaton(lex.map));
+  const { bestLen, bestNode } = longestStartingAt(words, ac);
   const found: Mention[] = [];
   let i = 0;
   while (i < words.length) {
-    let matched = 0;
-    for (let n = Math.min(lex.maxWords, words.length - i); n >= 1; n--) {
-      const target = lex.map.get(words.slice(i, i + n).join(" "));
-      if (target) {
-        found.push({ target, precededByOther: i > 0 && words[i - 1] === "other" });
-        matched = n;
-        break;
-      }
+    const L = bestLen[i];
+    if (L > 0) {
+      found.push({ target: ac.term[bestNode[i]]!, precededByOther: i > 0 && words[i - 1] === "other" });
+      i += L;
+    } else {
+      i++;
     }
-    i += matched || 1;
   }
   return found;
 }

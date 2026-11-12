@@ -1,0 +1,23 @@
+{
+  "label": "after",
+  "timestamp": "2026-11-11T22:52:17.044Z",
+  "node": "v26.12.0",
+  "lexiconTerms": 4912,
+  "lexiconMaxWords": 11,
+  "documents": 1565,
+  "matches": 12407,
+  "fingerprint": "53445072fc7d8156de0cc3a095c5c7a8354b40c8a045e758289a0b448a968442",
+  "buildLexiconMs": 37,
+  "scanMsRuns": [
+    947,
+    948,
+    953,
+    952,
+    952,
+    956,
+    948
+  ],
+  "scanMsMedian": 952,
+  "scanMsMin": 947,
+  "msPerDocMedian": 0.608
+}
