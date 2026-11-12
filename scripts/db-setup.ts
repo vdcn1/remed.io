@@ -10,19 +10,19 @@ try {
 
 async function main() {
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is not set (see .env.example)");
-  const client = new Client({ connectionString: process.env.DATABASE_URL });
-  await client.connect();
+  const databaseClient = new Client({ connectionString: process.env.DATABASE_URL });
+  await databaseClient.connect();
   try {
-    await client.query(readFileSync(join(process.cwd(), "db/schema.sql"), "utf8"));
-    await client.query("BEGIN");
-    const counts = await seed(client);
-    await client.query("COMMIT");
-    console.log("Database ready:", counts);
+    await databaseClient.query(readFileSync(join(process.cwd(), "db/schema.sql"), "utf8"));
+    await databaseClient.query("BEGIN");
+    const seededCounts = await seed(databaseClient);
+    await databaseClient.query("COMMIT");
+    console.log("Database ready:", seededCounts);
   } catch (err) {
-    await client.query("ROLLBACK").catch(() => {});
+    await databaseClient.query("ROLLBACK").catch(() => {});
     throw err;
   } finally {
-    await client.end();
+    await databaseClient.end();
   }
 }
 

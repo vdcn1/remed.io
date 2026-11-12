@@ -1,0 +1,23 @@
+{
+  "label": "rest-renamed",
+  "timestamp": "2026-11-12T02:25:06.570Z",
+  "node": "v26.12.0",
+  "lexiconTerms": 4912,
+  "lexiconMaxWordsPerPhrase": 11,
+  "documents": 1565,
+  "matches": 12407,
+  "fingerprint": "53445072fc7d8156de0cc3a095c5c7a8354b40c8a045e758289a0b448a968442",
+  "buildLexiconMs": 46,
+  "scanMsRuns": [
+    1068,
+    1077,
+    1053,
+    1112,
+    1036,
+    1038,
+    1038
+  ],
+  "scanMsMedian": 1053,
+  "scanMsMin": 1036,
+  "msPerDocMedian": 0.673
+}

@@ -113,7 +113,9 @@ async function main() {
     interactionCountBySeverity,
   );
   if (showStats) {
-    const topTargets = [...mentionCountByTargetName.entries()].sort((a, b) => b[1] - a[1]).slice(0, 60);
+    const topTargets = [...mentionCountByTargetName.entries()]
+      .sort((first, second) => second[1] - first[1])
+      .slice(0, 60);
     console.log("Most matched:", topTargets.map(([name, count]) => `${name} (${count})`).join(", "));
   }
 }

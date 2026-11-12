@@ -28,7 +28,7 @@ type LabelDocumentRow = {
 };
 
 function median(values: number[]) {
-  const sorted = [...values].sort((a, b) => a - b);
+  const sorted = [...values].sort((smaller, larger) => smaller - larger);
   return sorted[Math.floor(sorted.length / 2)];
 }
 

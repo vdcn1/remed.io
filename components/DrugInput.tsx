@@ -4,106 +4,107 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { DrugSuggestion } from "@/lib/interactions";
 
 type Props = {
-  label: string;
+  fieldLabel: string;
   value: string;
-  onChange: (value: string) => void;
+  onValueChange: (value: string) => void;
   placeholder?: string;
 };
 
-export default function DrugInput({ label, value, onChange, placeholder }: Props) {
-  const id = useId();
+export default function DrugInput({ fieldLabel, value, onValueChange, placeholder }: Props) {
+  const inputId = useId();
   const [suggestions, setSuggestions] = useState<DrugSuggestion[]>([]);
-  const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(-1);
-  const skipFetch = useRef(false);
+  const [isListOpen, setIsListOpen] = useState(false);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState(-1);
+  const skipNextFetch = useRef(false);
 
   useEffect(() => {
-    if (skipFetch.current) {
-      skipFetch.current = false;
+    // Picking a suggestion sets the input's value; that must not trigger a new search.
+    if (skipNextFetch.current) {
+      skipNextFetch.current = false;
       return;
     }
-    const q = value.trim();
-    if (!q) {
+    const query = value.trim();
+    if (!query) {
       setSuggestions([]);
       return;
     }
-    const ctrl = new AbortController();
-    const t = setTimeout(async () => {
+    const abortController = new AbortController();
+    const debounceTimer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/drugs?q=${encodeURIComponent(q)}`, { signal: ctrl.signal });
-        const data = (await res.json()) as { results?: DrugSuggestion[] };
-        setSuggestions(data.results ?? []);
-        setActive(-1);
+        const response = await fetch(`/api/drugs?q=${encodeURIComponent(query)}`, { signal: abortController.signal });
+        const payload = (await response.json()) as { results?: DrugSuggestion[] };
+        setSuggestions(payload.results ?? []);
+        setActiveSuggestionIndex(-1);
       } catch {
         /* aborted or offline — keep previous suggestions */
       }
     }, 150);
     return () => {
-      clearTimeout(t);
-      ctrl.abort();
+      clearTimeout(debounceTimer);
+      abortController.abort();
     };
   }, [value]);
 
-  const pick = (s: DrugSuggestion) => {
-    skipFetch.current = true;
-    onChange(s.name);
-    setOpen(false);
+  const pick = (suggestion: DrugSuggestion) => {
+    skipNextFetch.current = true;
+    onValueChange(suggestion.name);
+    setIsListOpen(false);
     setSuggestions([]);
   };
 
-  const showList = open && suggestions.length > 0;
+  const shouldShowList = isListOpen && suggestions.length > 0;
 
   return (
     <div className="field">
-      <label htmlFor={id}>{label}</label>
+      <label htmlFor={inputId}>{fieldLabel}</label>
       <input
-        id={id}
+        id={inputId}
         value={value}
         placeholder={placeholder}
         autoComplete="off"
         role="combobox"
-        aria-expanded={showList}
-        aria-controls={`${id}-list`}
-        onChange={(e) => {
-          onChange(e.target.value);
-          setOpen(true);
+        aria-expanded={shouldShowList}
+        aria-controls={`${inputId}-list`}
+        onChange={(event) => {
+          onValueChange(event.target.value);
+          setIsListOpen(true);
         }}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 120)}
-        onKeyDown={(e) => {
-          if (!showList) return;
-          if (e.key === "ArrowDown") {
-            e.preventDefault();
-            setActive((i) => Math.min(i + 1, suggestions.length - 1));
-          } else if (e.key === "ArrowUp") {
-            e.preventDefault();
-            setActive((i) => Math.max(i - 1, 0));
-          } else if (e.key === "Enter" && active >= 0) {
-            e.preventDefault();
-            pick(suggestions[active]);
-          } else if (e.key === "Escape") {
-            setOpen(false);
+        onFocus={() => setIsListOpen(true)}
+        onBlur={() => setTimeout(() => setIsListOpen(false), 120)}
+        onKeyDown={(event) => {
+          if (!shouldShowList) return;
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            setActiveSuggestionIndex((index) => Math.min(index + 1, suggestions.length - 1));
+          } else if (event.key === "ArrowUp") {
+            event.preventDefault();
+            setActiveSuggestionIndex((index) => Math.max(index - 1, 0));
+          } else if (event.key === "Enter" && activeSuggestionIndex >= 0) {
+            event.preventDefault();
+            pick(suggestions[activeSuggestionIndex]);
+          } else if (event.key === "Escape") {
+            setIsListOpen(false);
           }
         }}
       />
-      {showList && (
-        <ul className="suggestions" id={`${id}-list`} role="listbox">
-          {suggestions.map((s, i) => (
+      {shouldShowList && (
+        <ul className="suggestions" id={`${inputId}-list`} role="listbox">
+          {suggestions.map((suggestion, suggestionIndex) => (
             <li
-              key={s.slug}
+              key={suggestion.slug}
               role="option"
-              aria-selected={i === active}
-              className={i === active ? "active" : undefined}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                pick(s);
+              aria-selected={suggestionIndex === activeSuggestionIndex}
+              className={suggestionIndex === activeSuggestionIndex ? "active" : undefined}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                pick(suggestion);
               }}
             >
-              <span>{s.name}</span>
-              {s.matched && s.matched.toLowerCase() !== s.name.toLowerCase() && (
-                <span className="muted"> · {s.matched}</span>
+              <span>{suggestion.name}</span>
+              {suggestion.matched && suggestion.matched.toLowerCase() !== suggestion.name.toLowerCase() && (
+                <span className="muted"> · {suggestion.matched}</span>
               )}
-              {s.kind !== "drug" && <span className="tag">{s.kind}</span>}
+              {suggestion.kind !== "drug" && <span className="tag">{suggestion.kind}</span>}
             </li>
           ))}
         </ul>

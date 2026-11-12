@@ -45,13 +45,13 @@ const DRUG_SELECT = `
   FROM drugs d`;
 
 /** Autocomplete over generic names and brand aliases. Prefix matches rank first. */
-export async function searchDrugs(db: Queryable, q: string, limit = 8): Promise<DrugSuggestion[]> {
-  const term = q.trim().toLowerCase();
-  if (!term) return [];
-  const { rows } = await db.query<DrugSuggestion & { rank: number }>(
-    `WITH hits AS (
+export async function searchDrugs(db: Queryable, userQuery: string, maxSuggestions = 8): Promise<DrugSuggestion[]> {
+  const searchTerm = userQuery.trim().toLowerCase();
+  if (!searchTerm) return [];
+  const { rows: rankedSuggestions } = await db.query<DrugSuggestion & { matchRank: number }>(
+    `WITH drug_name_hits AS (
        SELECT d.slug, d.name, d.kind, NULL::text AS matched,
-              CASE WHEN lower(d.name) = $1 THEN 0 WHEN lower(d.name) LIKE $1 || '%' THEN 1 ELSE 3 END AS rank
+              CASE WHEN lower(d.name) = $1 THEN 0 WHEN lower(d.name) LIKE $1 || '%' THEN 1 ELSE 3 END AS match_rank
        FROM drugs d WHERE lower(d.name) LIKE '%' || $1 || '%'
        UNION ALL
        SELECT d.slug, d.name, d.kind, a.alias,
@@ -59,20 +59,20 @@ export async function searchDrugs(db: Queryable, q: string, limit = 8): Promise<
        FROM drug_aliases a JOIN drugs d ON d.id = a.drug_id
        WHERE lower(a.alias) LIKE '%' || $1 || '%'
      )
-     SELECT DISTINCT ON (slug) slug, name, kind, matched, rank
-     FROM hits ORDER BY slug, rank`,
-    [term],
+     SELECT DISTINCT ON (slug) slug, name, kind, matched, match_rank AS "matchRank"
+     FROM drug_name_hits ORDER BY slug, match_rank`,
+    [searchTerm],
   );
-  return rows
-    .sort((x, y) => x.rank - y.rank || x.name.localeCompare(y.name))
-    .slice(0, limit)
-    .map(({ rank: _rank, ...s }) => s);
+  return rankedSuggestions
+    .sort((left, right) => left.matchRank - right.matchRank || left.name.localeCompare(right.name))
+    .slice(0, maxSuggestions)
+    .map(({ matchRank: _matchRank, ...suggestion }) => suggestion);
 }
 
 /** Resolve free text (slug, generic name, or brand name) to a drug. */
-export async function resolveDrug(db: Queryable, input: string): Promise<Drug | null> {
-  const term = input.trim().toLowerCase();
-  if (!term) return null;
+export async function resolveDrug(db: Queryable, enteredName: string): Promise<Drug | null> {
+  const normalizedName = enteredName.trim().toLowerCase();
+  if (!normalizedName) return null;
   const { rows } = await db.query<Drug>(
     `${DRUG_SELECT}
      WHERE d.slug = $1 OR lower(d.name) = $1
@@ -82,7 +82,7 @@ export async function resolveDrug(db: Queryable, input: string): Promise<Drug | 
         OR d.id IN (SELECT drug_id FROM drug_aliases WHERE regexp_replace(lower(alias), '[^a-z0-9]', '', 'g') = $2)
      ORDER BY (d.slug = $1 OR lower(d.name) = $1) DESC
      LIMIT 1`,
-    [term, term.replace(/[^a-z0-9]/g, "")],
+    [normalizedName, normalizedName.replace(/[^a-z0-9]/g, "")],
   );
   return rows[0] ?? null;
 }
@@ -107,10 +107,10 @@ type InteractionRow = {
 };
 
 /** All recorded interactions between two drugs, matching on the drugs themselves or their classes. */
-export async function findInteractions(db: Queryable, a: Drug, b: Drug): Promise<Interaction[]> {
-  const aClassIds = a.classes.map((c) => c.id);
-  const bClassIds = b.classes.map((c) => c.id);
-  const { rows } = await db.query<InteractionRow>(
+export async function findInteractions(db: Queryable, firstDrug: Drug, secondDrug: Drug): Promise<Interaction[]> {
+  const firstDrugClassIds = firstDrug.classes.map((drugClass) => drugClass.id);
+  const secondDrugClassIds = secondDrug.classes.map((drugClass) => drugClass.id);
+  const { rows: interactionRows } = await db.query<InteractionRow>(
     `SELECT i.id, i.severity, i.summary, i.mechanism, i.recommendation, i.source_ref,
             i.a_drug_id, i.a_class_id, i.b_drug_id, i.b_class_id,
             i.review_status, i.evidence_excerpt, i.extracted_by,
@@ -122,60 +122,66 @@ export async function findInteractions(db: Queryable, a: Drug, b: Drug): Promise
      WHERE i.review_status <> 'rejected' AND (((i.a_drug_id = $1 OR i.a_class_id = ANY($2::int[])) AND (i.b_drug_id = $3 OR i.b_class_id = ANY($4::int[])))
         OR ((i.a_drug_id = $3 OR i.a_class_id = ANY($4::int[])) AND (i.b_drug_id = $1 OR i.b_class_id = ANY($2::int[]))))
      ORDER BY i.severity DESC, (i.extracted_by IS NULL) DESC, i.id`,
-    [a.id, aClassIds, b.id, bClassIds],
+    [firstDrug.id, firstDrugClassIds, secondDrug.id, secondDrugClassIds],
   );
 
-  const via = (drug: Drug, classId: number | null) => {
+  // Explains a rule match through a class, e.g. "Ibuprofen is one of the NSAIDs".
+  const classReason = (drug: Drug, classId: number | null) => {
     if (classId == null) return null;
-    const cls = drug.classes.find((c) => c.id === classId);
-    return cls ? `${drug.name} is one of the ${cls.name}` : null;
+    const matchedClass = drug.classes.find((drugClass) => drugClass.id === classId);
+    return matchedClass ? `${drug.name} is one of the ${matchedClass.name}` : null;
   };
 
-  const seenLabels = new Set<string>();
-  return rows.flatMap((r) => {
+  const labelNamesSeen = new Set<string>();
+  return interactionRows.flatMap((row) => {
     // One row per source label: the most severe (rows are ordered by severity).
-    if (r.label_of) {
-      if (seenLabels.has(r.label_of)) return [];
-      seenLabels.add(r.label_of);
+    if (row.label_of) {
+      if (labelNamesSeen.has(row.label_of)) return [];
+      labelNamesSeen.add(row.label_of);
     }
     // Work out which side of the rule each input drug landed on.
-    const aOnLeft = r.a_drug_id === a.id || (r.a_class_id != null && aClassIds.includes(r.a_class_id));
-    const bOnRight = r.b_drug_id === b.id || (r.b_class_id != null && bClassIds.includes(r.b_class_id));
-    const straight = aOnLeft && bOnRight;
+    const firstIsLeftSide =
+      row.a_drug_id === firstDrug.id || (row.a_class_id != null && firstDrugClassIds.includes(row.a_class_id));
+    const secondIsRightSide =
+      row.b_drug_id === secondDrug.id || (row.b_class_id != null && secondDrugClassIds.includes(row.b_class_id));
+    const isStraightOrientation = firstIsLeftSide && secondIsRightSide;
     const matchedVia = [
-      via(a, straight ? r.a_class_id : r.b_class_id),
-      via(b, straight ? r.b_class_id : r.a_class_id),
-    ].filter((x): x is string => x !== null);
-    return [{
-      id: r.id,
-      severity: r.severity,
-      summary: r.summary,
-      mechanism: r.mechanism,
-      recommendation: r.recommendation,
-      source: { name: r.source_name, kind: r.source_kind, ref: r.source_ref },
-      reviewStatus: r.review_status,
-      evidence: r.evidence_excerpt,
-      extractedBy: r.extracted_by,
-      labelOf: r.label_of,
-      matchedVia,
-    }];
+      classReason(firstDrug, isStraightOrientation ? row.a_class_id : row.b_class_id),
+      classReason(secondDrug, isStraightOrientation ? row.b_class_id : row.a_class_id),
+    ].filter((reason): reason is string => reason !== null);
+    return [
+      {
+        id: row.id,
+        severity: row.severity,
+        summary: row.summary,
+        mechanism: row.mechanism,
+        recommendation: row.recommendation,
+        source: { name: row.source_name, kind: row.source_kind, ref: row.source_ref },
+        reviewStatus: row.review_status,
+        evidence: row.evidence_excerpt,
+        extractedBy: row.extracted_by,
+        labelOf: row.label_of,
+        matchedVia,
+      },
+    ];
   });
 }
 
 /** Flags when both drugs share a therapeutic class (e.g. two NSAIDs). */
-export function findDuplications(a: Drug, b: Drug): Duplication[] {
-  const bSlugs = new Set(b.classes.map((c) => c.slug));
-  return a.classes
-    .filter((c) => bSlugs.has(c.slug))
-    .map((c) => ({
-      className: c.name,
-      note: `Both are ${c.name}. Taking two drugs from the same class can duplicate the effect and add up side effects.`,
+export function findDuplications(firstDrug: Drug, secondDrug: Drug): Duplication[] {
+  const secondDrugClassSlugs = new Set(secondDrug.classes.map((drugClass) => drugClass.slug));
+  return firstDrug.classes
+    .filter((drugClass) => secondDrugClassSlugs.has(drugClass.slug))
+    .map((drugClass) => ({
+      className: drugClass.name,
+      note: `Both are ${drugClass.name}. Taking two drugs from the same class can duplicate the effect and add up side effects.`,
     }));
 }
 
-export function highestSeverity(list: Interaction[]): Severity | null {
-  return list.reduce<Severity | null>(
-    (max, i) => (max === null || SEVERITY_RANK[i.severity] > SEVERITY_RANK[max] ? i.severity : max),
+export function highestSeverity(interactions: Interaction[]): Severity | null {
+  return interactions.reduce<Severity | null>(
+    (highest, interaction) =>
+      highest === null || SEVERITY_RANK[interaction.severity] > SEVERITY_RANK[highest] ? interaction.severity : highest,
     null,
   );
 }

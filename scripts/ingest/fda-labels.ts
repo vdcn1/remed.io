@@ -14,8 +14,8 @@ import { parser } from "stream-json";
 import { pick } from "stream-json/filters/pick.js";
 import { streamArray } from "stream-json/streamers/stream-array.js";
 
-const LABEL_DIR = "data/raw/labels";
-const OUT = "data/raw/labels.ndjson";
+const LABEL_DIRECTORY = "data/raw/labels";
+const OUTPUT_PATH = "data/raw/labels.ndjson";
 
 // Label sections that describe interactions. The last two are OTC "Drug Facts" sections
 // ("Ask a doctor or pharmacist before use if you are taking a blood thinner").
@@ -28,9 +28,9 @@ export const SECTIONS = [
   "do_not_use",
   "ask_doctor_or_pharmacist",
 ] as const;
-type Section = (typeof SECTIONS)[number];
+type SectionKey = (typeof SECTIONS)[number];
 
-type RawLabel = Partial<Record<Section, string[]>> & {
+type RawOpenFdaLabel = Partial<Record<SectionKey, string[]>> & {
   set_id?: string;
   version?: string;
   effective_time?: string;
@@ -45,123 +45,135 @@ type RawLabel = Partial<Record<Section, string[]>> & {
 };
 
 export type SubstanceRecord = {
-  substance: string;          // e.g. "SERTRALINE HYDROCHLORIDE"
-  brands: string[];           // brand names seen on single-ingredient labels
-  rxBrands: string[];         // subset seen on prescription labels
-  epc: string[];              // FDA Established Pharmacologic Classes
-  productRxcuis: string[];    // RxNorm product ids (used to find the ingredient)
+  substance: string; // e.g. "SERTRALINE HYDROCHLORIDE"
+  brands: string[]; // brand names seen on single-ingredient labels
+  rxBrands: string[]; // subset seen on prescription labels
+  epc: string[]; // FDA Established Pharmacologic Classes
+  productRxcuis: string[]; // RxNorm product ids (used to find the ingredient)
   label: {
     set_id: string;
     version: string | null;
     effective_time: string | null;
     product_type: string;
-    sections: Partial<Record<Section, string>>;
+    sections: Partial<Record<SectionKey, string>>;
   };
 };
 
-type Candidate = SubstanceRecord & { score: number[] };
+type ScoredSubstanceRecord = SubstanceRecord & { score: number[] };
 
-const records = new Map<string, Candidate>();
-let seen = 0;
-let kept = 0;
+const substanceRecords = new Map<string, ScoredSubstanceRecord>();
+let labelsSeen = 0;
+let labelUpgrades = 0;
 
-function sectionsOf(label: RawLabel) {
-  const out: Partial<Record<Section, string>> = {};
-  for (const s of SECTIONS) {
-    const text = label[s]?.join("\n").trim();
-    if (text) out[s] = text;
+function interactionSectionsOf(label: RawOpenFdaLabel) {
+  const sectionsByKey: Partial<Record<SectionKey, string>> = {};
+  for (const sectionKey of SECTIONS) {
+    const sectionText = label[sectionKey]?.join("\n").trim();
+    if (sectionText) sectionsByKey[sectionKey] = sectionText;
   }
-  return out;
+  return sectionsByKey;
 }
 
 // Higher is better, compared lexicographically.
-function scoreOf(label: RawLabel, sections: Partial<Record<Section, string>>, isRx: boolean) {
+function labelScore(label: RawOpenFdaLabel, sections: Partial<Record<SectionKey, string>>, isPrescription: boolean) {
   return [
     sections.drug_interactions ? 1 : 0,
-    isRx ? 1 : 0,
+    isPrescription ? 1 : 0,
     Number(label.effective_time ?? 0),
-    Object.values(sections).reduce((n, t) => n + (t?.length ?? 0), 0),
+    Object.values(sections).reduce((totalLength, sectionText) => totalLength + (sectionText?.length ?? 0), 0),
   ];
 }
 
-function better(a: number[], b: number[]) {
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] > b[i];
+function scoreIsBetter(candidateScore: number[], currentScore: number[]) {
+  for (let index = 0; index < candidateScore.length; index++) {
+    if (candidateScore[index] !== currentScore[index]) return candidateScore[index] > currentScore[index];
+  }
   return false;
 }
 
 function addUnique(list: string[], values: string[] | undefined) {
-  for (const v of values ?? []) if (!list.includes(v)) list.push(v);
+  for (const value of values ?? []) if (!list.includes(value)) list.push(value);
 }
 
-function consider(label: RawLabel) {
-  seen++;
-  const of = label.openfda;
-  const substances = of?.substance_name ?? [];
+function considerLabel(label: RawOpenFdaLabel) {
+  labelsSeen++;
+  const openfdaFields = label.openfda;
+  const substanceNames = openfdaFields?.substance_name ?? [];
   // Combination products are skipped for now: one label would describe several ingredients.
-  if (substances.length !== 1 || !label.set_id) return;
-  const productType = of?.product_type?.[0] ?? "";
+  if (substanceNames.length !== 1 || !label.set_id) return;
+  const productType = openfdaFields?.product_type?.[0] ?? "";
   if (!productType.startsWith("HUMAN")) return;
 
-  const sections = sectionsOf(label);
+  const sections = interactionSectionsOf(label);
   if (Object.keys(sections).length === 0) return;
 
-  const substance = substances[0].toUpperCase().trim();
-  const isRx = productType === "HUMAN PRESCRIPTION DRUG";
-  const score = scoreOf(label, sections, isRx);
+  const substance = substanceNames[0].toUpperCase().trim();
+  const isPrescription = productType === "HUMAN PRESCRIPTION DRUG";
+  const score = labelScore(label, sections, isPrescription);
 
-  let rec = records.get(substance);
-  if (!rec) {
-    rec = {
+  let substanceRecord = substanceRecords.get(substance);
+  if (!substanceRecord) {
+    substanceRecord = {
       substance,
       brands: [],
       rxBrands: [],
       epc: [],
       productRxcuis: [],
       score: [-1],
-      label: null as unknown as Candidate["label"],
+      label: null as unknown as SubstanceRecord["label"],
     };
-    records.set(substance, rec);
+    substanceRecords.set(substance, substanceRecord);
   }
-  addUnique(rec.brands, of?.brand_name);
-  if (isRx) addUnique(rec.rxBrands, of?.brand_name);
-  addUnique(rec.epc, of?.pharm_class_epc);
-  if (rec.productRxcuis.length < 20) addUnique(rec.productRxcuis, of?.rxcui?.slice(0, 5));
+  addUnique(substanceRecord.brands, openfdaFields?.brand_name);
+  if (isPrescription) addUnique(substanceRecord.rxBrands, openfdaFields?.brand_name);
+  addUnique(substanceRecord.epc, openfdaFields?.pharm_class_epc);
+  if (substanceRecord.productRxcuis.length < 20) {
+    addUnique(substanceRecord.productRxcuis, openfdaFields?.rxcui?.slice(0, 5));
+  }
 
-  if (better(score, rec.score)) {
-    rec.score = score;
-    rec.label = {
+  if (scoreIsBetter(score, substanceRecord.score)) {
+    substanceRecord.score = score;
+    substanceRecord.label = {
       set_id: label.set_id,
       version: label.version ?? null,
       effective_time: label.effective_time ?? null,
       product_type: productType,
       sections,
     };
-    kept++;
+    labelUpgrades++;
   }
 }
 
-async function processZip(file: string) {
-  const unzip = spawn("unzip", ["-p", file], { stdio: ["ignore", "pipe", "inherit"] });
-  const pipeline = chain([unzip.stdout, parser(), pick({ filter: "results" }), streamArray()]);
-  for await (const { value } of pipeline as AsyncIterable<{ value: RawLabel }>) consider(value);
+async function processZipFile(zipPath: string) {
+  const unzipProcess = spawn("unzip", ["-p", zipPath], { stdio: ["ignore", "pipe", "inherit"] });
+  const pipeline = chain([unzipProcess.stdout, parser(), pick({ filter: "results" }), streamArray()]);
+  for await (const { value } of pipeline as AsyncIterable<{ value: RawOpenFdaLabel }>) considerLabel(value);
 }
 
 async function main() {
-  const files = readdirSync(LABEL_DIR)
-    .filter((f) => f.endsWith(".json.zip"))
+  const zipFileNames = readdirSync(LABEL_DIRECTORY)
+    .filter((fileName) => fileName.endsWith(".json.zip"))
     .sort();
-  if (files.length === 0) throw new Error(`No label zips in ${LABEL_DIR}. See README → Importing data.`);
-
-  for (const f of files) {
-    const t = Date.now();
-    await processZip(join(LABEL_DIR, f));
-    console.log(`${f}: ${seen} labels seen, ${records.size} substances (${((Date.now() - t) / 1000).toFixed(0)}s)`);
+  if (zipFileNames.length === 0) {
+    throw new Error(`No label zips in ${LABEL_DIRECTORY}. See README → Importing data.`);
   }
 
-  const out = createWriteStream(OUT);
-  for (const { score: _score, ...rec } of records.values()) out.write(JSON.stringify(rec) + "\n");
-  await new Promise<void>((resolve, reject) => out.end((err?: Error | null) => (err ? reject(err) : resolve())));
-  console.log(`Wrote ${records.size} substances to ${OUT} (${kept} label upgrades)`);
+  for (const zipFileName of zipFileNames) {
+    const startedAt = Date.now();
+    await processZipFile(join(LABEL_DIRECTORY, zipFileName));
+    console.log(
+      `${zipFileName}: ${labelsSeen} labels seen, ${substanceRecords.size} substances (${((Date.now() - startedAt) / 1000).toFixed(0)}s)`,
+    );
+  }
+
+  const outputStream = createWriteStream(OUTPUT_PATH);
+  for (const { score: _score, ...substanceRecord } of substanceRecords.values()) {
+    outputStream.write(JSON.stringify(substanceRecord) + "\n");
+  }
+  await new Promise<void>((resolve, reject) =>
+    outputStream.end((err?: Error | null) => (err ? reject(err) : resolve())),
+  );
+  console.log(`Wrote ${substanceRecords.size} substances to ${OUTPUT_PATH} (${labelUpgrades} label upgrades)`);
 }
 
 main().catch((err) => {

@@ -1,8 +1,8 @@
-// Name normalisation shared by the importers and the extraction resolver.
+// Name normalisation shared by the importers and the text matcher.
 
 /** "St. John's Wort" -> "st-johns-wort" */
-export function slugify(s: string) {
-  return s
+export function slugify(name: string) {
+  return name
     .toLowerCase()
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "")
@@ -12,8 +12,8 @@ export function slugify(s: string) {
 }
 
 /** Matching key for class names: "Non-steroidal Anti-inflammatory Drugs (NSAIDs)" -> "non steroidal anti inflammatory drug nsaid" */
-export function classNorm(s: string) {
-  const words = s
+export function classNorm(name: string) {
+  const normalizedWords = name
     .toLowerCase()
     .replace(/\[epc\]/g, "")
     .replace(/['’]/g, "")
@@ -21,12 +21,12 @@ export function classNorm(s: string) {
     .trim()
     .split(" ")
     .filter(Boolean)
-    .map((w) => (w.length > 3 && w.endsWith("s") && !w.endsWith("ss") ? w.slice(0, -1) : w));
-  return words.join(" ");
+    .map((word) => (word.length > 3 && word.endsWith("s") && !word.endsWith("ss") ? word.slice(0, -1) : word));
+  return normalizedWords.join(" ");
 }
 
 /** "SERTRALINE HYDROCHLORIDE" -> "Sertraline hydrochloride" */
-export function displayName(s: string) {
-  const lower = s.trim().toLowerCase();
-  return lower.charAt(0).toUpperCase() + lower.slice(1);
+export function displayName(rawName: string) {
+  const lowerCased = rawName.trim().toLowerCase();
+  return lowerCased.charAt(0).toUpperCase() + lowerCased.slice(1);
 }

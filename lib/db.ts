@@ -1,21 +1,21 @@
 import { Pool, type QueryResultRow } from "pg";
 
 // Reuse one pool across hot reloads in dev.
-const globalForDb = globalThis as unknown as { pgPool?: Pool };
+const globalForDatabase = globalThis as unknown as { pgPool?: Pool };
 
 export const pool =
-  globalForDb.pgPool ??
+  globalForDatabase.pgPool ??
   new Pool({
     connectionString: process.env.DATABASE_URL,
     max: Number(process.env.DATABASE_POOL_MAX ?? 10),
   });
 
-if (process.env.NODE_ENV !== "production") globalForDb.pgPool = pool;
+if (process.env.NODE_ENV !== "production") globalForDatabase.pgPool = pool;
 
 export type Queryable = {
-  query<R extends QueryResultRow = any>(text: string, params?: unknown[]): Promise<{ rows: R[] }>;
+  query<Row extends QueryResultRow = any>(sqlText: string, params?: unknown[]): Promise<{ rows: Row[] }>;
 };
 
-export function query<R extends QueryResultRow = any>(text: string, params?: unknown[]) {
-  return pool.query<R>(text, params);
+export function query<Row extends QueryResultRow = any>(sqlText: string, params?: unknown[]) {
+  return pool.query<Row>(sqlText, params);
 }

@@ -6,8 +6,8 @@ import type { Drug, Duplication, Interaction, Severity } from "@/lib/interaction
 import type { FdaResult } from "@/lib/openfda";
 
 type CheckResult = {
-  a: { input: string; drug: Drug | null };
-  b: { input: string; drug: Drug | null };
+  first: { input: string; drug: Drug | null };
+  second: { input: string; drug: Drug | null };
   severity: Severity | null;
   interactions: Interaction[];
   duplications: Duplication[];
@@ -21,7 +21,7 @@ const SEVERITY_LABEL: Record<Severity, string> = {
   minor: "Minor interaction",
 };
 
-const EXAMPLES: [string, string][] = [
+const EXAMPLE_PAIRS: [string, string][] = [
   ["Warfarin", "Advil"],
   ["Zoloft", "Tramadol"],
   ["Viagra", "Nitroglycerin"],
@@ -30,30 +30,30 @@ const EXAMPLES: [string, string][] = [
 ];
 
 export default function Checker() {
-  const [a, setA] = useState("");
-  const [b, setB] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<CheckResult | null>(null);
+  const [firstRemedy, setFirstRemedy] = useState("");
+  const [secondRemedy, setSecondRemedy] = useState("");
+  const [isChecking, setIsChecking] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [checkResult, setCheckResult] = useState<CheckResult | null>(null);
 
-  async function check(x = a, y = b) {
-    if (!x.trim() || !y.trim()) return;
-    setLoading(true);
-    setError(null);
+  async function checkPair(firstName = firstRemedy, secondName = secondRemedy) {
+    if (!firstName.trim() || !secondName.trim()) return;
+    setIsChecking(true);
+    setErrorMessage(null);
     try {
-      const res = await fetch("/api/interactions", {
+      const response = await fetch("/api/interactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ a: x, b: y }),
+        body: JSON.stringify({ first: firstName, second: secondName }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Something went wrong");
-      setResult(data);
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error ?? "Something went wrong");
+      setCheckResult(payload);
     } catch (err) {
-      setResult(null);
-      setError(err instanceof Error ? err.message : String(err));
+      setCheckResult(null);
+      setErrorMessage(err instanceof Error ? err.message : String(err));
     } finally {
-      setLoading(false);
+      setIsChecking(false);
     }
   }
 
@@ -61,59 +61,73 @@ export default function Checker() {
     <section>
       <form
         className="checker"
-        onSubmit={(e) => {
-          e.preventDefault();
-          check();
+        onSubmit={(event) => {
+          event.preventDefault();
+          checkPair();
         }}
       >
-        <DrugInput label="First remedy" value={a} onChange={setA} placeholder="e.g. Ibuprofen" />
+        <DrugInput
+          fieldLabel="First remedy"
+          value={firstRemedy}
+          onValueChange={setFirstRemedy}
+          placeholder="e.g. Ibuprofen"
+        />
         <button
           type="button"
           className="swap"
           aria-label="Swap remedies"
           title="Swap"
           onClick={() => {
-            setA(b);
-            setB(a);
+            setFirstRemedy(secondRemedy);
+            setSecondRemedy(firstRemedy);
           }}
         >
           ⇄
         </button>
-        <DrugInput label="Second remedy" value={b} onChange={setB} placeholder="e.g. Warfarin" />
-        <button className="primary" type="submit" disabled={loading || !a.trim() || !b.trim()}>
-          {loading ? "Checking…" : "Check"}
+        <DrugInput
+          fieldLabel="Second remedy"
+          value={secondRemedy}
+          onValueChange={setSecondRemedy}
+          placeholder="e.g. Warfarin"
+        />
+        <button
+          className="primary"
+          type="submit"
+          disabled={isChecking || !firstRemedy.trim() || !secondRemedy.trim()}
+        >
+          {isChecking ? "Checking…" : "Check"}
         </button>
       </form>
 
       <div className="examples">
         <span className="muted">Try:</span>
-        {EXAMPLES.map(([x, y]) => (
+        {EXAMPLE_PAIRS.map(([exampleFirst, exampleSecond]) => (
           <button
-            key={x + y}
+            key={exampleFirst + exampleSecond}
             type="button"
             className="chip"
             onClick={() => {
-              setA(x);
-              setB(y);
-              check(x, y);
+              setFirstRemedy(exampleFirst);
+              setSecondRemedy(exampleSecond);
+              checkPair(exampleFirst, exampleSecond);
             }}
           >
-            {x} + {y}
+            {exampleFirst} + {exampleSecond}
           </button>
         ))}
       </div>
 
-      {error && <div className="alert">{error}</div>}
-      {result && <ResultView result={result} />}
+      {errorMessage && <div className="alert">{errorMessage}</div>}
+      {checkResult && <ResultView result={checkResult} />}
     </section>
   );
 }
 
 function ResultView({ result }: { result: CheckResult }) {
-  const nameA = result.a.drug?.name ?? result.a.input;
-  const nameB = result.b.drug?.name ?? result.b.input;
-  const unknown = [result.a, result.b].filter((s) => !s.drug).map((s) => s.input);
-  const fdaHits = result.fda.findings.length > 0;
+  const firstName = result.first.drug?.name ?? result.first.input;
+  const secondName = result.second.drug?.name ?? result.second.input;
+  const unknownInputs = [result.first, result.second].filter((side) => !side.drug).map((side) => side.input);
+  const hasFdaFindings = result.fda.findings.length > 0;
 
   let verdict: { tone: string; title: string; text: string };
   if (result.severity) {
@@ -122,17 +136,17 @@ function ResultView({ result }: { result: CheckResult }) {
       title: SEVERITY_LABEL[result.severity],
       text: result.interactions[0].summary,
     };
-  } else if (fdaHits) {
+  } else if (hasFdaFindings) {
     verdict = {
       tone: "moderate",
       title: "Mentioned on the FDA label",
       text: "No curated interaction on record, but one drug's official label mentions the other. Review the excerpts below.",
     };
-  } else if (unknown.length) {
+  } else if (unknownInputs.length) {
     verdict = {
       tone: "unknown",
       title: "Not enough data",
-      text: `We don't have “${unknown.join("” or “")}” in our database yet, so we can't rule out an interaction.`,
+      text: `We don't have “${unknownInputs.join("” or “")}” in our database yet, so we can't rule out an interaction.`,
     };
   } else {
     verdict = {
@@ -146,64 +160,66 @@ function ResultView({ result }: { result: CheckResult }) {
     <div className="result">
       <div className={`verdict tone-${verdict.tone}`}>
         <div className="pair">
-          {nameA} <span className="plus">+</span> {nameB}
+          {firstName} <span className="plus">+</span> {secondName}
         </div>
         <h2>{verdict.title}</h2>
         <p>{verdict.text}</p>
       </div>
 
-      {result.interactions.map((i) => (
-        <article key={i.id} className="card">
+      {result.interactions.map((interaction) => (
+        <article key={interaction.id} className="card">
           <div className="badges">
-            <span className={`badge tone-${i.severity}`}>{i.severity}</span>
-            {i.reviewStatus !== "reviewed" && (
+            <span className={`badge tone-${interaction.severity}`}>{interaction.severity}</span>
+            {interaction.reviewStatus !== "reviewed" && (
               <span className="badge tone-unknown" title="No doctor or pharmacist has checked this entry">
                 not reviewed
               </span>
             )}
           </div>
-          <h3>{i.summary}</h3>
-          {i.matchedVia.length > 0 && <p className="via">Applies because {i.matchedVia.join(" and ")}.</p>}
-          {i.mechanism && (
+          <h3>{interaction.summary}</h3>
+          {interaction.matchedVia.length > 0 && (
+            <p className="via">Applies because {interaction.matchedVia.join(" and ")}.</p>
+          )}
+          {interaction.mechanism && (
             <p>
-              <strong>Why:</strong> {i.mechanism}
+              <strong>Why:</strong> {interaction.mechanism}
             </p>
           )}
-          {i.recommendation && (
+          {interaction.recommendation && (
             <p>
-              <strong>What to do:</strong> {i.recommendation}
+              <strong>What to do:</strong> {interaction.recommendation}
             </p>
           )}
-          {i.evidence && (
+          {interaction.evidence && (
             <blockquote className="evidence">
-              “{i.evidence}”
+              “{interaction.evidence}”
             </blockquote>
           )}
           <p className="source">
-            {i.extractedBy ? (
+            {interaction.extractedBy ? (
               <>
-                Found by text matching in the {i.labelOf ?? "FDA"} label
-                {i.source.ref && (
+                Found by text matching in the {interaction.labelOf ?? "FDA"} label
+                {interaction.source.ref && (
                   <>
                     {" · "}
-                    <a href={i.source.ref} target="_blank" rel="noreferrer">
+                    <a href={interaction.source.ref} target="_blank" rel="noreferrer">
                       DailyMed
                     </a>
                   </>
                 )}
               </>
             ) : (
-              <>Source: {i.source.name}</>
+              <>Source: {interaction.source.name}</>
             )}
           </p>
         </article>
       ))}
 
-      {result.duplications.map((d) => (
-        <article key={d.className} className="card">
+      {result.duplications.map((duplication) => (
+        <article key={duplication.className} className="card">
           <span className="badge tone-moderate">same class</span>
           <h3>Therapeutic duplication</h3>
-          <p>{d.note}</p>
+          <p>{duplication.note}</p>
         </article>
       ))}
 
@@ -212,21 +228,21 @@ function ResultView({ result }: { result: CheckResult }) {
           <h3>FDA label cross-check</h3>
           {result.fda.error ? (
             <p className="muted">Couldn&apos;t reach openFDA ({result.fda.error}).</p>
-          ) : fdaHits ? (
-            result.fda.findings.map((f, idx) => (
-              <blockquote key={idx}>
+          ) : hasFdaFindings ? (
+            result.fda.findings.map((finding, findingIndex) => (
+              <blockquote key={findingIndex}>
                 <div className="fda-head">
-                  {f.labelOf} label · {f.section} · mentions “{f.mentions}”
-                  {f.url && (
+                  {finding.labelOf} label · {finding.section} · mentions “{finding.mentions}”
+                  {finding.url && (
                     <>
                       {" · "}
-                      <a href={f.url} target="_blank" rel="noreferrer">
+                      <a href={finding.url} target="_blank" rel="noreferrer">
                         DailyMed
                       </a>
                     </>
                   )}
                 </div>
-                {f.excerpt}
+                {finding.excerpt}
               </blockquote>
             ))
           ) : (

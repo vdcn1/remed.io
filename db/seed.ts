@@ -4,7 +4,7 @@ import { classes, drugs, interactions } from "./seed-data";
 
 export async function seed(db: Queryable) {
   const {
-    rows: [source],
+    rows: [curatedSource],
   } = await db.query<{ id: number }>(
     `INSERT INTO sources (slug, name, kind, license)
      VALUES ('curated', 'remed.io curated starter set', 'curated', 'internal')
@@ -12,72 +12,83 @@ export async function seed(db: Queryable) {
      RETURNING id`,
   );
 
-  const classIds = new Map<string, number>();
-  for (const c of classes) {
-    const { rows } = await db.query<{ id: number }>(
+  const classIdBySlug = new Map<string, number>();
+  for (const drugClass of classes) {
+    const { rows: classRows } = await db.query<{ id: number }>(
       `INSERT INTO drug_classes (slug, name) VALUES ($1, $2)
        ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name RETURNING id`,
-      [c.slug, c.name],
+      [drugClass.slug, drugClass.name],
     );
-    classIds.set(c.slug, rows[0].id);
-    for (const alias of [c.name, c.slug, ...(c.aliases ?? [])]) {
+    classIdBySlug.set(drugClass.slug, classRows[0].id);
+    for (const alias of [drugClass.name, drugClass.slug, ...(drugClass.aliases ?? [])]) {
       await db.query(
         `INSERT INTO drug_class_aliases (class_id, alias, norm) VALUES ($1, $2, $3)
          ON CONFLICT (norm) DO UPDATE SET class_id = EXCLUDED.class_id, alias = EXCLUDED.alias`,
-        [rows[0].id, alias, classNorm(alias)],
+        [classRows[0].id, alias, classNorm(alias)],
       );
     }
   }
 
-  const drugIds = new Map<string, number>();
-  for (const d of drugs) {
-    const { rows } = await db.query<{ id: number }>(
+  const drugIdBySlug = new Map<string, number>();
+  for (const drug of drugs) {
+    const { rows: drugRows } = await db.query<{ id: number }>(
       `INSERT INTO drugs (slug, name, kind) VALUES ($1, $2, $3)
        ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, kind = EXCLUDED.kind, updated_at = now()
        RETURNING id`,
-      [d.slug, d.name, d.kind ?? "drug"],
+      [drug.slug, drug.name, drug.kind ?? "drug"],
     );
-    const id = rows[0].id;
-    drugIds.set(d.slug, id);
+    const drugId = drugRows[0].id;
+    drugIdBySlug.set(drug.slug, drugId);
 
-    for (const alias of d.aliases ?? []) {
+    for (const alias of drug.aliases ?? []) {
       await db.query(
         `INSERT INTO drug_aliases (drug_id, alias) VALUES ($1, $2)
          ON CONFLICT (lower(alias)) DO NOTHING`,
-        [id, alias],
+        [drugId, alias],
       );
     }
-    for (const cls of d.classes ?? []) {
-      const classId = classIds.get(cls);
-      if (!classId) throw new Error(`Unknown class "${cls}" on drug "${d.slug}"`);
+    for (const classSlug of drug.classes ?? []) {
+      const classId = classIdBySlug.get(classSlug);
+      if (!classId) throw new Error(`Unknown class "${classSlug}" on drug "${drug.slug}"`);
       await db.query(
         `INSERT INTO drug_class_members (drug_id, class_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
-        [id, classId],
+        [drugId, classId],
       );
     }
   }
 
-  const resolve = (subject: string): [number | null, number | null] => {
+  // "class:<slug>" names a class; anything else names a drug. Returns [drugId, classId].
+  const resolveSubject = (subject: string): [number | null, number | null] => {
     if (subject.startsWith("class:")) {
-      const id = classIds.get(subject.slice(6));
-      if (!id) throw new Error(`Unknown class subject "${subject}"`);
-      return [null, id];
+      const classId = classIdBySlug.get(subject.slice(6));
+      if (!classId) throw new Error(`Unknown class subject "${subject}"`);
+      return [null, classId];
     }
-    const id = drugIds.get(subject);
-    if (!id) throw new Error(`Unknown drug subject "${subject}"`);
-    return [id, null];
+    const drugId = drugIdBySlug.get(subject);
+    if (!drugId) throw new Error(`Unknown drug subject "${subject}"`);
+    return [drugId, null];
   };
 
   // Curated interactions are fully replaced on each seed so edits to seed-data.ts apply.
-  await db.query(`DELETE FROM interactions WHERE source_id = $1`, [source.id]);
-  for (const i of interactions) {
-    const [aDrug, aClass] = resolve(i.a);
-    const [bDrug, bClass] = resolve(i.b);
+  await db.query(`DELETE FROM interactions WHERE source_id = $1`, [curatedSource.id]);
+  for (const interaction of interactions) {
+    const [aDrugId, aClassId] = resolveSubject(interaction.a);
+    const [bDrugId, bClassId] = resolveSubject(interaction.b);
     await db.query(
       `INSERT INTO interactions
          (a_drug_id, a_class_id, b_drug_id, b_class_id, severity, summary, mechanism, recommendation, source_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [aDrug, aClass, bDrug, bClass, i.severity, i.summary, i.mechanism ?? null, i.recommendation ?? null, source.id],
+      [
+        aDrugId,
+        aClassId,
+        bDrugId,
+        bClassId,
+        interaction.severity,
+        interaction.summary,
+        interaction.mechanism ?? null,
+        interaction.recommendation ?? null,
+        curatedSource.id,
+      ],
     );
   }
 
