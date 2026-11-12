@@ -79,8 +79,175 @@ export const drugs: {
   { slug: "ethinyl-estradiol", name: "Combined oral contraceptive", aliases: ["Ethinyl estradiol", "The pill"] },
   { slug: "st-johns-wort", name: "St. John's Wort", kind: "supplement", aliases: ["Hypericum perforatum"] },
   { slug: "ginkgo-biloba", name: "Ginkgo biloba", kind: "supplement", aliases: ["Ginkgo"] },
-  { slug: "ethanol", name: "Alcohol", kind: "food", aliases: ["Ethanol", "Alcoholic beverages", "Ethyl alcohol"] },
+  { slug: "ethanol", name: "Alcohol", kind: "drug", aliases: ["Ethanol", "Alcoholic beverages", "Ethyl alcohol"] },
   { slug: "grapefruit-juice", name: "Grapefruit juice", kind: "food", aliases: ["Grapefruit"] },
+  { slug: "heroin", name: "Heroin", kind: "drug", aliases: ["Diacetylmorphine"] },
+  { slug: "cocaine", name: "Cocaine", kind: "drug", aliases: ["Cocaine hydrochloride"] },
+  { slug: "fentanyl", name: "Fentanyl", kind: "drug", aliases: ["Fentanyl citrate"] },
+  { slug: "methamphetamine", name: "Methamphetamine", kind: "drug", aliases: ["Meth", "Crystal meth"] },
+  { slug: "cannabis", name: "Cannabis", kind: "drug", aliases: ["Marijuana"] },
+  { slug: "mdma", name: "MDMA", kind: "drug", aliases: ["Ecstasy", "Molly"] },
+  { slug: "ketamine", name: "Ketamine", kind: "drug" },
+  { slug: "xylazine", name: "Xylazine", kind: "drug" },
+  { slug: "inhalants", name: "Inhalants", kind: "drug" },
+  { slug: "psilocybin", name: "Psilocybin", kind: "drug", aliases: ["Magic mushrooms"] },
+  { slug: "anabolic-steroids", name: "Anabolic steroids", kind: "drug", aliases: ["APEDs"] },
+  { slug: "synthetic-cannabinoids", name: "Synthetic cannabinoids", kind: "drug", aliases: ["K2", "Spice"] },
+  { slug: "synthetic-cathinones", name: "Synthetic cathinones", kind: "drug", aliases: ["Bath salts"] },
+];
+
+// Labels shown on a single drug's page. Text is quoted from the source named in `sourceRef`.
+export const NIDA_SOURCE = {
+  slug: "nida-drugfacts",
+  name: "NIDA (National Institute on Drug Abuse)",
+  url: "https://nida.nih.gov/",
+  license: "Public domain (US Government work)",
+};
+
+export const drugLabels: {
+  drug: string;
+  labelType: "warning" | "legal_status";
+  title: string;
+  body: string;
+  sourceRef: string;
+  checkedOn: string;
+}[] = [
+  {
+    drug: "heroin",
+    labelType: "warning",
+    title: "Overdose can stop breathing",
+    body: "A large dose of heroin depresses heart rate and breathing to such an extent that a user cannot survive without medical help. Naloxone can reverse an opioid overdose.",
+    sourceRef: "https://nida.nih.gov/publications/research-reports/heroin/what-can-be-done-for-heroin-overdose",
+    checkedOn: "2026-11-11",
+  },
+  {
+    drug: "heroin",
+    labelType: "warning",
+    title: "Long-term brain changes",
+    body: "Slowed breathing can also lead to coma and permanent brain damage. Repeated heroin use changes the physical structure and physiology of the brain, creating long-term imbalances that are not easily reversed.",
+    sourceRef: "https://nida.nih.gov/publications/research-reports/heroin/what-are-long-term-effects-heroin-use",
+    checkedOn: "2026-11-11",
+  },
+  {
+    drug: "cocaine",
+    labelType: "warning",
+    title: "Can cause sudden death",
+    body: "Any route of administration can potentially lead to absorption of toxic amounts of cocaine, causing heart attacks, strokes, or seizures, all of which can result in sudden death. In rare instances, sudden death can occur on the first use of cocaine or unexpectedly thereafter.",
+    sourceRef: "https://nida.nih.gov/publications/drugfacts/cocaine",
+    checkedOn: "2026-11-11",
+  },
+  {
+    drug: "cocaine",
+    labelType: "warning",
+    title: "Often mixed with fentanyl",
+    body: "Adulteration of cocaine with highly potent fentanyl and related substances is a major contributor to the rising drug overdose deaths.",
+    sourceRef: "https://nida.nih.gov/publications/drugfacts/cocaine",
+    checkedOn: "2026-11-11",
+  },
+  {
+    drug: "fentanyl",
+    labelType: "warning",
+    title: "A very small amount can be fatal",
+    body: "As little as 2 mg of fentanyl, the amount of a few grains of salt, can be fatal. Like other opioids, fentanyl affects the parts of the brain that control breathing.",
+    sourceRef: "https://nida.nih.gov/research-topics/fentanyl",
+    checkedOn: "2026-11-11",
+  },
+  {
+    drug: "fentanyl",
+    labelType: "warning",
+    title: "Counterfeit pills",
+    body: "Fake pills may look exactly like the real thing but can also contain fentanyl, often in deadly doses.",
+    sourceRef: "https://nida.nih.gov/research-topics/fentanyl",
+    checkedOn: "2026-11-11",
+  },
+  {
+    drug: "methamphetamine",
+    labelType: "warning",
+    title: "Serious heart and brain risks",
+    body: "It can also cause serious negative health effects, including paranoia, anxiety, rapid heart rate, irregular heartbeat, stroke, or even death.",
+    sourceRef: "https://nida.nih.gov/research-topics/methamphetamine",
+    checkedOn: "2026-11-11",
+  },
+  {
+    drug: "methamphetamine",
+    labelType: "warning",
+    title: "Adds to the overdose crisis",
+    body: "Methamphetamine, taken alone or combined with fentanyl, contributes to the overdose crisis in the United States.",
+    sourceRef: "https://nida.nih.gov/research-topics/methamphetamine",
+    checkedOn: "2026-11-11",
+  },
+  {
+    drug: "cannabis",
+    labelType: "warning",
+    title: "Accidental poisoning of children",
+    body: "Children eating cannabis edibles, such as gummies, is a growing health concern. This usually happens by accident and can result in hospitalization and serious illness.",
+    sourceRef: "https://nida.nih.gov/research-topics/cannabis",
+    checkedOn: "2026-11-11",
+  },
+  {
+    drug: "mdma",
+    labelType: "warning",
+    title: "Dangerous rise in body temperature",
+    body: "People can experience a dangerously steep rise in body temperature, called hyperpyrexia, particularly if they are very physically active or are in a warm environment such as a club. While deaths associated with MDMA use are rare, taking it can also lead to more severe side effects.",
+    sourceRef: "https://nida.nih.gov/research-topics/mdma-ecstasy-molly",
+    checkedOn: "2026-11-11",
+  },
+  {
+    drug: "ketamine",
+    labelType: "warning",
+    title: "Breathing can slow dangerously",
+    body: "Studies show that unsupervised ketamine use may have serious health risks. These include respiratory depression, which is dangerously slow and shallow breathing.",
+    sourceRef: "https://nida.nih.gov/research-topics/ketamine",
+    checkedOn: "2026-11-11",
+  },
+  {
+    drug: "xylazine",
+    labelType: "warning",
+    title: "Dangerously low breathing and heart rate",
+    body: "Xylazine can slow breathing, heart rate, and blood pressure to dangerously low levels. Overdose reversal medications do not reverse the effects of xylazine.",
+    sourceRef: "https://nida.nih.gov/research-topics/xylazine",
+    checkedOn: "2026-11-11",
+  },
+  {
+    drug: "inhalants",
+    labelType: "warning",
+    title: "Can cause sudden death",
+    body: "Using an inhalant can cause severe health problems or even death. Inhalants can cause cardiac arrest or suffocation. These fatal effects, known as sudden sniffing death, can happen even when a person uses inhalants just one time.",
+    sourceRef: "https://nida.nih.gov/research-topics/inhalants",
+    checkedOn: "2026-11-11",
+  },
+  {
+    drug: "psilocybin",
+    labelType: "warning",
+    title: "Raises blood pressure and heart rate",
+    body: "Psilocybin typically raises blood pressure and heart rate, which may be dangerous for people with heart conditions.",
+    sourceRef: "https://nida.nih.gov/research-topics/psilocybin-magic-mushrooms",
+    checkedOn: "2026-11-11",
+  },
+  {
+    drug: "anabolic-steroids",
+    labelType: "warning",
+    title: "Severe, sometimes irreversible damage",
+    body: "Anabolic steroids can cause severe, long-lasting, and in some cases, irreversible damage. They can lead to early heart attacks, strokes, liver tumors, kidney failure, and psychiatric problems.",
+    sourceRef: "https://nida.nih.gov/research-topics/steroids-anabolic",
+    checkedOn: "2026-11-11",
+  },
+  {
+    drug: "synthetic-cannabinoids",
+    labelType: "warning",
+    title: "Can be life-threatening",
+    body: "Research shows use of illicit synthetic cannabinoids is associated with severe health problems and can be life-threatening.",
+    sourceRef: "https://nida.nih.gov/research-topics/synthetic-cannabinoids-k2spice",
+    checkedOn: "2026-11-11",
+  },
+  {
+    drug: "synthetic-cathinones",
+    labelType: "warning",
+    title: "Can be life-threatening",
+    body: "Research shows illicit synthetic cathinone use can be life-threatening and cause other serious health and safety problems. People who use synthetic cathinones regularly may develop stimulant use disorder.",
+    sourceRef: "https://nida.nih.gov/research-topics/synthetic-cathinones-bath-salts",
+    checkedOn: "2026-11-11",
+  },
 ];
 
 // Subjects: a drug slug, or "class:<slug>".

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { pool } from "@/lib/db";
 import { checkFdaLabels, type FdaSubject } from "@/lib/openfda";
 import {
+  findDrugLabels,
   findDuplications,
   findInteractions,
   highestSeverity,
@@ -53,10 +54,14 @@ export async function POST(request: NextRequest) {
     ? { enabled: false, findings: [], checked: [] }
     : await checkFdaLabels(fdaSubject(firstName, firstDrug), fdaSubject(secondName, secondDrug));
   const duplications = firstDrug && secondDrug ? findDuplications(firstDrug, secondDrug) : [];
+  const [firstLabels, secondLabels] = await Promise.all([
+    firstDrug ? findDrugLabels(pool, firstDrug.id) : Promise.resolve([]),
+    secondDrug ? findDrugLabels(pool, secondDrug.id) : Promise.resolve([]),
+  ]);
 
   return NextResponse.json({
-    first: { input: firstName, drug: firstDrug },
-    second: { input: secondName, drug: secondDrug },
+    first: { input: firstName, drug: firstDrug, labels: firstLabels },
+    second: { input: secondName, drug: secondDrug, labels: secondLabels },
     severity: highestSeverity(interactions),
     interactions,
     duplications,

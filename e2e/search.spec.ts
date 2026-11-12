@@ -110,6 +110,18 @@ test.describe("drug search", () => {
   });
 });
 
+test.describe("drug warnings", () => {
+  test("checking a drug with a warning shows that warning above the result", async ({ page }) => {
+    await page.goto("/");
+    await remedyField(page, FIRST_REMEDY).fill("Heroin");
+    await remedyField(page, SECOND_REMEDY).fill("Alcohol");
+    await page.getByRole("button", { name: "Check", exact: true }).click();
+
+    await expect(page.getByText("Overdose can stop breathing")).toBeVisible();
+    await expect(page.locator(".label-warning").first()).toHaveText("Warning");
+  });
+});
+
 test.describe("both remedy fields empty", () => {
   test("the Check button is disabled when both fields are empty", async ({ page }) => {
     await page.goto("/");

@@ -2,12 +2,12 @@
 
 import { useState } from "react";
 import DrugInput from "./DrugInput";
-import type { Drug, Duplication, Interaction, Severity } from "@/lib/interactions";
+import type { Drug, DrugLabel, Duplication, Interaction, Severity } from "@/lib/interactions";
 import type { FdaResult } from "@/lib/openfda";
 
 type CheckResult = {
-  first: { input: string; drug: Drug | null };
-  second: { input: string; drug: Drug | null };
+  first: { input: string; drug: Drug | null; labels: DrugLabel[] };
+  second: { input: string; drug: Drug | null; labels: DrugLabel[] };
   severity: Severity | null;
   interactions: Interaction[];
   duplications: Duplication[];
@@ -165,6 +165,41 @@ function ResultView({ result }: { result: CheckResult }) {
         <h2>{verdict.title}</h2>
         <p>{verdict.text}</p>
       </div>
+
+      {[
+        { drugName: firstName, labels: result.first.labels },
+        { drugName: secondName, labels: result.second.labels },
+      ].flatMap(({ drugName, labels }) =>
+        labels.map((label) => (
+          <article key={label.id} className={`card label-card label-card-${label.labelType}`}>
+            <div className="badges">
+              <span className={`badge label-${label.labelType}`}>
+                {label.labelType === "warning" ? "Warning" : "Legal status"}
+              </span>
+              <span className="muted">{drugName}</span>
+              {label.reviewStatus !== "reviewed" && (
+                <span className="badge tone-unknown" title="No doctor or pharmacist has checked this entry">
+                  not reviewed
+                </span>
+              )}
+            </div>
+            <h3>{label.title}</h3>
+            <p>{label.body}</p>
+            <p className="source">
+              Source: {label.source.name}
+              {label.source.checkedOn && <> · checked {label.source.checkedOn}</>}
+              {label.source.ref && (
+                <>
+                  {" · "}
+                  <a href={label.source.ref} target="_blank" rel="noreferrer">
+                    page
+                  </a>
+                </>
+              )}
+            </p>
+          </article>
+        )),
+      )}
 
       {result.interactions.map((interaction) => (
         <article key={interaction.id} className="card">

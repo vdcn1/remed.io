@@ -19,6 +19,8 @@
   --drug-bg: #e8eaff;       --drug-fg: #3730a3;       /* kind: drug */
   --supplement-bg: #dcf5f1; --supplement-fg: #0f5f58; /* kind: supplement */
   --food-bg: #f3f7d6;       --food-fg: #4d6512;       /* kind: food */
+  --warning-bg: #fce7f3;    --warning-fg: #9d174d;    /* drug label: warning */
+  --legal-bg: #e2e8f0;      --legal-fg: #1e3a5f;      /* drug label: legal status */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -42,6 +44,8 @@
     --drug-bg: #1e2148;       --drug-fg: #b4bcff;
     --supplement-bg: #123a36; --supplement-fg: #7ff0e0;
     --food-bg: #26330f;       --food-fg: #d7f48e;
+    --warning-bg: #3d1a2e;    --warning-fg: #f9a8d4;
+    --legal-bg: #1e2a3d;      --legal-fg: #bfd7f2;
   }
 }
 
@@ -166,6 +170,8 @@ h1 { font-size: clamp(1.8rem, 5vw, 2.6rem); line-height: 1.1; letter-spacing: -0
 .tone-unknown { background: var(--unknown-bg); color: var(--unknown-fg); }
 
 .label-same-class { background: var(--class-bg); color: var(--class-fg); }
+.label-warning { background: var(--warning-bg); color: var(--warning-fg); }
+.label-legal_status { background: var(--legal-bg); color: var(--legal-fg); }
 .tag-drug { background: var(--drug-bg); color: var(--drug-fg); border-color: transparent; }
 .tag-supplement { background: var(--supplement-bg); color: var(--supplement-fg); border-color: transparent; }
 .tag-food { background: var(--food-bg); color: var(--food-fg); border-color: transparent; }

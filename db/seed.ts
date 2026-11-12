@@ -1,6 +1,6 @@
 import type { Queryable } from "../lib/db";
 import { classNorm } from "../lib/normalize";
-import { classes, drugs, interactions } from "./seed-data";
+import { classes, drugLabels, drugs, interactions, NIDA_SOURCE } from "./seed-data";
 
 export async function seed(db: Queryable) {
   const {
@@ -55,6 +55,27 @@ export async function seed(db: Queryable) {
         [drugId, classId],
       );
     }
+  }
+
+  // Drug labels are replaced on each seed, like the curated interactions below.
+  const {
+    rows: [nidaSource],
+  } = await db.query<{ id: number }>(
+    `INSERT INTO sources (slug, name, kind, url, license)
+     VALUES ($1, $2, 'curated', $3, $4)
+     ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name, url = EXCLUDED.url, license = EXCLUDED.license
+     RETURNING id`,
+    [NIDA_SOURCE.slug, NIDA_SOURCE.name, NIDA_SOURCE.url, NIDA_SOURCE.license],
+  );
+  await db.query(`DELETE FROM drug_labels WHERE source_id = $1`, [nidaSource.id]);
+  for (const label of drugLabels) {
+    const drugId = drugIdBySlug.get(label.drug);
+    if (!drugId) throw new Error(`Unknown drug "${label.drug}" on a drug label`);
+    await db.query(
+      `INSERT INTO drug_labels (drug_id, label_type, title, body, source_id, source_ref, source_checked_on)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [drugId, label.labelType, label.title, label.body, nidaSource.id, label.sourceRef, label.checkedOn],
+    );
   }
 
   // "class:<slug>" names a class; anything else names a drug. Returns [drugId, classId].

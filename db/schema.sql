@@ -115,3 +115,19 @@ CREATE INDEX IF NOT EXISTS interactions_raw_doc_idx ON interactions (raw_documen
 
 ALTER TABLE drug_aliases ADD COLUMN IF NOT EXISTS origin TEXT NOT NULL DEFAULT 'curated';  -- 'curated' | 'import'
 ALTER TABLE drug_class_members ADD COLUMN IF NOT EXISTS origin TEXT NOT NULL DEFAULT 'curated';
+
+-- Labels describe one drug on its own: a health warning, or its legal status.
+-- Every label is shown with its source and is 'unreviewed' until someone qualified checks it.
+CREATE TABLE IF NOT EXISTS drug_labels (
+  id                 SERIAL PRIMARY KEY,
+  drug_id            INT NOT NULL REFERENCES drugs(id) ON DELETE CASCADE,
+  label_type         TEXT NOT NULL CHECK (label_type IN ('warning', 'legal_status')),
+  title              TEXT NOT NULL,
+  body               TEXT NOT NULL,
+  source_id          INT NOT NULL REFERENCES sources(id),
+  source_ref         TEXT,                     -- page the text came from
+  source_checked_on  DATE,                     -- when the source was read
+  review_status      TEXT NOT NULL DEFAULT 'unreviewed' CHECK (review_status IN ('unreviewed', 'reviewed', 'rejected')),
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS drug_labels_drug_idx ON drug_labels (drug_id);

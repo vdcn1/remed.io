@@ -167,6 +167,44 @@ export async function findInteractions(db: Queryable, firstDrug: Drug, secondDru
   });
 }
 
+export type DrugLabel = {
+  id: number;
+  labelType: "warning" | "legal_status";
+  title: string;
+  body: string;
+  source: { name: string; ref: string | null; checkedOn: string | null };
+  reviewStatus: "unreviewed" | "reviewed";
+};
+
+/** Labels about one drug on its own (warnings, legal status), each with its source. */
+export async function findDrugLabels(db: Queryable, drugId: number): Promise<DrugLabel[]> {
+  const { rows: labelRows } = await db.query<{
+    id: number;
+    label_type: DrugLabel["labelType"];
+    title: string;
+    body: string;
+    source_name: string;
+    source_ref: string | null;
+    source_checked_on: string | null;
+    review_status: DrugLabel["reviewStatus"];
+  }>(
+    `SELECT l.id, l.label_type, l.title, l.body, s.name AS source_name, l.source_ref,
+            to_char(l.source_checked_on, 'YYYY-MM-DD') AS source_checked_on, l.review_status
+     FROM drug_labels l JOIN sources s ON s.id = l.source_id
+     WHERE l.drug_id = $1 AND l.review_status <> 'rejected'
+     ORDER BY l.label_type, l.id`,
+    [drugId],
+  );
+  return labelRows.map((row) => ({
+    id: row.id,
+    labelType: row.label_type,
+    title: row.title,
+    body: row.body,
+    source: { name: row.source_name, ref: row.source_ref, checkedOn: row.source_checked_on },
+    reviewStatus: row.review_status,
+  }));
+}
+
 /** Flags when both drugs share a therapeutic class (e.g. two NSAIDs). */
 export function findDuplications(firstDrug: Drug, secondDrug: Drug): Duplication[] {
   const secondDrugClassSlugs = new Set(secondDrug.classes.map((drugClass) => drugClass.slug));
