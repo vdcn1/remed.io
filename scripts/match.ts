@@ -12,20 +12,24 @@ try {
   process.loadEnvFile(".env.local");
 } catch {}
 
-const args = process.argv.slice(2);
-const only = args.find((a) => a.startsWith("--only="))?.slice(7).split(",").map((s) => s.trim().toLowerCase());
-const showStats = args.includes("--stats");
+const cliArgs = process.argv.slice(2);
+const onlyDrugSlugs = cliArgs
+  .find((arg) => arg.startsWith("--only="))
+  ?.slice(7)
+  .split(",")
+  .map((slug) => slug.trim().toLowerCase());
+const showStats = cliArgs.includes("--stats");
 
 async function main() {
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is not set");
   const db = new Client({ connectionString: process.env.DATABASE_URL });
   await db.connect();
 
-  const t0 = Date.now();
-  const lex = await buildLexicon(db);
-  console.log(`Lexicon: ${lex.map.size} terms, up to ${lex.maxWords} words long`);
+  const runStartedAt = Date.now();
+  const lexicon = await buildLexicon(db);
+  console.log(`Lexicon: ${lexicon.phraseToTarget.size} terms, up to ${lexicon.maxWordsPerPhrase} words long`);
 
-  const { rows: docs } = await db.query<{
+  const { rows: labelDocuments } = await db.query<{
     id: number;
     drug_id: number;
     drug_name: string;
@@ -41,43 +45,58 @@ async function main() {
      LEFT JOIN drug_class_members m ON m.drug_id = d.id
      WHERE ($1::text[] IS NULL OR d.slug = ANY($1))
      GROUP BY r.id, d.id`,
-    [only ?? null],
+    [onlyDrugSlugs ?? null],
   );
 
-  const counts = { contraindicated: 0, major: 0, moderate: 0, minor: 0 };
-  const targetFreq = new Map<string, number>();
-  let total = 0;
+  const interactionCountBySeverity = { contraindicated: 0, major: 0, moderate: 0, minor: 0 };
+  const mentionCountByTargetName = new Map<string, number>();
+  let totalInteractionCount = 0;
 
   await db.query("BEGIN");
   try {
-    for (const doc of docs) {
-      const matches = scanDocument(doc.sections, lex, { drugId: doc.drug_id, ownClassIds: new Set(doc.own_class_ids) });
-      await db.query(`DELETE FROM interactions WHERE raw_document_id = $1`, [doc.id]);
-      for (const m of matches) {
-        const { summary, recommendation } = describe(doc.drug_name, m.target.name, m.grade, m.section);
+    for (const labelDocument of labelDocuments) {
+      const documentMatches = scanDocument(labelDocument.sections, lexicon, {
+        drugId: labelDocument.drug_id,
+        ownClassIds: new Set(labelDocument.own_class_ids),
+      });
+      await db.query(`DELETE FROM interactions WHERE raw_document_id = $1`, [labelDocument.id]);
+      for (const documentMatch of documentMatches) {
+        const { summary, recommendation } = describe(
+          labelDocument.drug_name,
+          documentMatch.target.name,
+          documentMatch.grade,
+          documentMatch.section,
+        );
         await db.query(
           `INSERT INTO interactions
              (a_drug_id, b_drug_id, b_class_id, severity, summary, recommendation,
               source_id, source_ref, evidence_excerpt, extracted_by, raw_document_id, review_status)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'unreviewed')`,
           [
-            doc.drug_id,
-            m.target.type === "drug" ? m.target.id : null,
-            m.target.type === "class" ? m.target.id : null,
-            m.severity,
+            labelDocument.drug_id,
+            documentMatch.target.type === "drug" ? documentMatch.target.id : null,
+            documentMatch.target.type === "class" ? documentMatch.target.id : null,
+            documentMatch.severity,
             summary,
             recommendation,
-            doc.source_id,
-            doc.url,
-            trimAround(m.sentence),
+            labelDocument.source_id,
+            labelDocument.url,
+            trimAround(documentMatch.sentence),
             MATCHER_VERSION,
-            doc.id,
+            labelDocument.id,
           ],
         );
-        counts[m.severity]++;
-        total++;
-        targetFreq.set(m.target.name, (targetFreq.get(m.target.name) ?? 0) + 1);
-        if (only) console.log(`  ${doc.drug_name} → ${m.target.name} [${m.severity}] ${trimAround(m.sentence, 140)}`);
+        interactionCountBySeverity[documentMatch.severity]++;
+        totalInteractionCount++;
+        mentionCountByTargetName.set(
+          documentMatch.target.name,
+          (mentionCountByTargetName.get(documentMatch.target.name) ?? 0) + 1,
+        );
+        if (onlyDrugSlugs) {
+          console.log(
+            `  ${labelDocument.drug_name} → ${documentMatch.target.name} [${documentMatch.severity}] ${trimAround(documentMatch.sentence, 140)}`,
+          );
+        }
       }
     }
     await db.query("COMMIT");
@@ -88,10 +107,14 @@ async function main() {
     await db.end();
   }
 
-  console.log(`${docs.length} labels → ${total} interactions in ${((Date.now() - t0) / 1000).toFixed(1)}s`, counts);
+  const elapsedSeconds = ((Date.now() - runStartedAt) / 1000).toFixed(1);
+  console.log(
+    `${labelDocuments.length} labels → ${totalInteractionCount} interactions in ${elapsedSeconds}s`,
+    interactionCountBySeverity,
+  );
   if (showStats) {
-    const top = [...targetFreq.entries()].sort((a, b) => b[1] - a[1]).slice(0, 60);
-    console.log("Most matched:", top.map(([n, c]) => `${n} (${c})`).join(", "));
+    const topTargets = [...mentionCountByTargetName.entries()].sort((a, b) => b[1] - a[1]).slice(0, 60);
+    console.log("Most matched:", topTargets.map(([name, count]) => `${name} (${count})`).join(", "));
   }
 }
 

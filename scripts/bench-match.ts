@@ -16,20 +16,20 @@ try {
   process.loadEnvFile(".env.local");
 } catch {}
 
-const args = process.argv.slice(2);
-const label = args.find((a) => a.startsWith("--label="))?.slice(8) ?? "run";
-const runs = Number(args.find((a) => a.startsWith("--runs="))?.slice(7) ?? 7);
+const cliArgs = process.argv.slice(2);
+const reportLabel = cliArgs.find((arg) => arg.startsWith("--label="))?.slice(8) ?? "run";
+const timedRunCount = Number(cliArgs.find((arg) => arg.startsWith("--runs="))?.slice(7) ?? 7);
 
-type DocRow = {
+type LabelDocumentRow = {
   id: number;
   drug_id: number;
   sections: Record<string, string>;
   own_class_ids: number[];
 };
 
-function median(xs: number[]) {
-  const s = [...xs].sort((a, b) => a - b);
-  return s[Math.floor(s.length / 2)];
+function median(values: number[]) {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)];
 }
 
 async function main() {
@@ -37,11 +37,11 @@ async function main() {
   const db = new Client({ connectionString: process.env.DATABASE_URL });
   await db.connect();
 
-  const tBuild0 = performance.now();
-  const lex = await buildLexicon(db);
-  const buildMs = performance.now() - tBuild0;
+  const lexiconBuildStartedAt = performance.now();
+  const lexicon = await buildLexicon(db);
+  const lexiconBuildMs = performance.now() - lexiconBuildStartedAt;
 
-  const { rows: docs } = await db.query<DocRow>(
+  const { rows: labelDocuments } = await db.query<LabelDocumentRow>(
     `SELECT r.id, r.drug_id, r.content->'sections' AS sections,
             COALESCE(array_agg(m.class_id) FILTER (WHERE m.class_id IS NOT NULL), '{}') AS own_class_ids
      FROM raw_documents r
@@ -52,53 +52,58 @@ async function main() {
   );
   await db.end();
 
-  const scanAll = () =>
-    docs.map((doc) => ({
-      id: doc.id,
-      matches: scanDocument(doc.sections, lex, { drugId: doc.drug_id, ownClassIds: new Set(doc.own_class_ids) }),
+  const scanAllLabels = () =>
+    labelDocuments.map((labelDocument) => ({
+      id: labelDocument.id,
+      documentMatches: scanDocument(labelDocument.sections, lexicon, {
+        drugId: labelDocument.drug_id,
+        ownClassIds: new Set(labelDocument.own_class_ids),
+      }),
     }));
 
   // Warm-up, then timed runs. Output is kept from the first timed run for the fingerprint.
-  scanAll();
-  const times: number[] = [];
-  let output: ReturnType<typeof scanAll> | null = null;
-  for (let r = 0; r < runs; r++) {
-    const t0 = performance.now();
-    const out = scanAll();
-    times.push(performance.now() - t0);
-    if (!output) output = out;
+  scanAllLabels();
+  const scanMsPerRun: number[] = [];
+  let firstRunOutput: ReturnType<typeof scanAllLabels> | null = null;
+  for (let runIndex = 0; runIndex < timedRunCount; runIndex++) {
+    const startedAt = performance.now();
+    const runOutput = scanAllLabels();
+    scanMsPerRun.push(performance.now() - startedAt);
+    if (!firstRunOutput) firstRunOutput = runOutput;
   }
 
-  const hash = createHash("sha256");
-  let matchCount = 0;
-  for (const d of output!) {
-    for (const m of d.matches) {
-      matchCount++;
-      hash.update(`${d.id}|${m.target.type}:${m.target.id}|${m.severity}|${m.section}|${m.sentence}\n`);
+  const fingerprintHash = createHash("sha256");
+  let totalMatchCount = 0;
+  for (const labelResult of firstRunOutput!) {
+    for (const documentMatch of labelResult.documentMatches) {
+      totalMatchCount++;
+      fingerprintHash.update(
+        `${labelResult.id}|${documentMatch.target.type}:${documentMatch.target.id}|${documentMatch.severity}|${documentMatch.section}|${documentMatch.sentence}\n`,
+      );
     }
   }
 
   const report = {
-    label,
+    label: reportLabel,
     timestamp: new Date().toISOString(),
     node: process.version,
-    lexiconTerms: lex.map.size,
-    lexiconMaxWords: lex.maxWords,
-    documents: docs.length,
-    matches: matchCount,
-    fingerprint: hash.digest("hex"),
-    buildLexiconMs: Math.round(buildMs),
-    scanMsRuns: times.map((t) => Math.round(t)),
-    scanMsMedian: Math.round(median(times)),
-    scanMsMin: Math.round(Math.min(...times)),
-    msPerDocMedian: Number((median(times) / docs.length).toFixed(3)),
+    lexiconTerms: lexicon.phraseToTarget.size,
+    lexiconMaxWordsPerPhrase: lexicon.maxWordsPerPhrase,
+    documents: labelDocuments.length,
+    matches: totalMatchCount,
+    fingerprint: fingerprintHash.digest("hex"),
+    buildLexiconMs: Math.round(lexiconBuildMs),
+    scanMsRuns: scanMsPerRun.map((ms) => Math.round(ms)),
+    scanMsMedian: Math.round(median(scanMsPerRun)),
+    scanMsMin: Math.round(Math.min(...scanMsPerRun)),
+    msPerDocMedian: Number((median(scanMsPerRun) / labelDocuments.length).toFixed(3)),
   };
 
   mkdirSync("data/bench", { recursive: true });
-  const path = `data/bench/${label}.json`;
-  writeFileSync(path, JSON.stringify(report, null, 2) + "\n");
+  const reportPath = `data/bench/${reportLabel}.json`;
+  writeFileSync(reportPath, JSON.stringify(report, null, 2) + "\n");
   console.log(JSON.stringify(report, null, 2));
-  console.log(`Wrote ${path}`);
+  console.log(`Wrote ${reportPath}`);
 }
 
 main().catch((err) => {
