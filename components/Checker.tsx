@@ -123,6 +123,25 @@ export default function Checker() {
   );
 }
 
+/** Warning triangle shown for critical (contraindicated) interactions, which can be fatal. */
+function CriticalWarningIcon() {
+  return (
+    <svg
+      className="critical-icon"
+      role="img"
+      aria-label="Critical interaction: can be fatal"
+      viewBox="0 0 24 24"
+      width="28"
+      height="28"
+    >
+      <path
+        fill="currentColor"
+        d="M12 2.5 1.5 21h21L12 2.5Zm0 6.2 6.9 12.3H5.1L12 8.7Zm-1 3.8h2v4.6h-2v-4.6Zm0 5.6h2v2h-2v-2Z"
+      />
+    </svg>
+  );
+}
+
 function ResultView({ result }: { result: CheckResult }) {
   const firstName = result.first.drug?.name ?? result.first.input;
   const secondName = result.second.drug?.name ?? result.second.input;
@@ -162,6 +181,7 @@ function ResultView({ result }: { result: CheckResult }) {
         <div className="pair">
           {firstName} <span className="plus">+</span> {secondName}
         </div>
+        {result.severity === "contraindicated" && <CriticalWarningIcon />}
         <h2>{verdict.title}</h2>
         <p>{verdict.text}</p>
       </div>

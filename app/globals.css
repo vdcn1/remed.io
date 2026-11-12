@@ -161,6 +161,7 @@ h1 { font-size: clamp(1.8rem, 5vw, 2.6rem); line-height: 1.1; letter-spacing: -0
 .verdict .plus { opacity: 0.6; padding: 0 4px; }
 .verdict h2 { margin: 4px 0 6px; font-size: 1.5rem; letter-spacing: -0.02em; }
 .verdict p { margin: 0; }
+.critical-icon { display: block; color: var(--contra-fg); margin-bottom: 4px; }
 
 .tone-contraindicated { background: var(--contra-bg); color: var(--contra-fg); }
 .tone-major { background: var(--major-bg); color: var(--major-fg); }

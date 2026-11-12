@@ -110,6 +110,27 @@ test.describe("drug search", () => {
   });
 });
 
+test.describe("critical interaction icon", () => {
+  test("shows the warning icon for a contraindicated (critical) pair", async ({ page }) => {
+    await page.goto("/");
+    await remedyField(page, FIRST_REMEDY).fill("Simvastatin");
+    await remedyField(page, SECOND_REMEDY).fill("Clarithromycin");
+    await page.getByRole("button", { name: "Check", exact: true }).click();
+
+    await expect(page.getByRole("img", { name: "Critical interaction: can be fatal" })).toBeVisible();
+  });
+
+  test("does not show the warning icon for a major (non-critical) pair", async ({ page }) => {
+    await page.goto("/");
+    await remedyField(page, FIRST_REMEDY).fill("Warfarin");
+    await remedyField(page, SECOND_REMEDY).fill("Advil");
+    await page.getByRole("button", { name: "Check", exact: true }).click();
+
+    await expect(page.locator(".verdict")).toBeVisible();
+    await expect(page.getByRole("img", { name: "Critical interaction: can be fatal" })).toHaveCount(0);
+  });
+});
+
 test.describe("drug warnings", () => {
   test("checking a drug with a warning shows that warning above the result", async ({ page }) => {
     await page.goto("/");
