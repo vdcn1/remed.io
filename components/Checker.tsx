@@ -217,7 +217,7 @@ function ResultView({ result }: { result: CheckResult }) {
 
       {result.duplications.map((duplication) => (
         <article key={duplication.className} className="card">
-          <span className="badge tone-moderate">same class</span>
+          <span className="badge label-same-class">same class</span>
           <h3>Therapeutic duplication</h3>
           <p>{duplication.note}</p>
         </article>

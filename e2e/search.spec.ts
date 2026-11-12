@@ -43,6 +43,13 @@ test.describe("drug search", () => {
     await expect(ibuprofenOption).toContainText("Advil");
   });
 
+  test("each suggestion shows its kind as a tag with its own colour class", async ({ page }) => {
+    await page.goto("/");
+    await typeAndWaitForSuggestions(page, FIRST_REMEDY, "war");
+
+    await expect(page.getByRole("option", { name: /Warfarin/ }).locator(".tag-drug")).toHaveText("drug");
+  });
+
   test("picking a suggestion with the keyboard fills the field and closes the list", async ({ page }) => {
     await page.goto("/");
     const field = remedyField(page, FIRST_REMEDY);

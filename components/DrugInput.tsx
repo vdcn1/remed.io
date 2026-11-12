@@ -104,7 +104,7 @@ export default function DrugInput({ fieldLabel, value, onValueChange, placeholde
               {suggestion.matched && suggestion.matched.toLowerCase() !== suggestion.name.toLowerCase() && (
                 <span className="muted"> · {suggestion.matched}</span>
               )}
-              {suggestion.kind !== "drug" && <span className="tag">{suggestion.kind}</span>}
+              <span className={`tag tag-${suggestion.kind}`}>{suggestion.kind}</span>
             </li>
           ))}
         </ul>

@@ -13,6 +13,12 @@
   --minor-bg: #e6f0fd;  --minor-fg: #1e4f9a;
   --none-bg: #e3f6ec;   --none-fg: #146c3d;
   --unknown-bg: #eef1f0; --unknown-fg: #3c4744;
+
+  /* Labels that are not severities: each kind has its own colour. */
+  --class-bg: #efe9fe;      --class-fg: #5b21b6;      /* same therapeutic class */
+  --drug-bg: #e8eaff;       --drug-fg: #3730a3;       /* kind: drug */
+  --supplement-bg: #dcf5f1; --supplement-fg: #0f5f58; /* kind: supplement */
+  --food-bg: #f3f7d6;       --food-fg: #4d6512;       /* kind: food */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -31,6 +37,11 @@
     --minor-bg: #142540;  --minor-fg: #93c5fd;
     --none-bg: #12301f;   --none-fg: #86efac;
     --unknown-bg: #222a28; --unknown-fg: #c6d0cc;
+
+    --class-bg: #2e1d4a;      --class-fg: #d8c8ff;
+    --drug-bg: #1e2148;       --drug-fg: #b4bcff;
+    --supplement-bg: #123a36; --supplement-fg: #7ff0e0;
+    --food-bg: #26330f;       --food-fg: #d7f48e;
   }
 }
 
@@ -153,6 +164,11 @@ h1 { font-size: clamp(1.8rem, 5vw, 2.6rem); line-height: 1.1; letter-spacing: -0
 .tone-minor { background: var(--minor-bg); color: var(--minor-fg); }
 .tone-none { background: var(--none-bg); color: var(--none-fg); }
 .tone-unknown { background: var(--unknown-bg); color: var(--unknown-fg); }
+
+.label-same-class { background: var(--class-bg); color: var(--class-fg); }
+.tag-drug { background: var(--drug-bg); color: var(--drug-fg); border-color: transparent; }
+.tag-supplement { background: var(--supplement-bg); color: var(--supplement-fg); border-color: transparent; }
+.tag-food { background: var(--food-bg); color: var(--food-fg); border-color: transparent; }
 
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; }
 .card h3 { margin: 8px 0 8px; font-size: 1.05rem; }
