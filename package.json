@@ -12,7 +12,8 @@
     "ingest:labels": "tsx scripts/ingest/fda-labels.ts",
     "ingest:drugs": "tsx scripts/ingest/load-drugs.ts",
     "match": "tsx scripts/match.ts",
-    "bench:match": "tsx scripts/bench-match.ts"
+    "bench:match": "tsx scripts/bench-match.ts",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "next": "^16.4.5",
@@ -22,6 +23,7 @@
     "stream-json": "^3.8.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.0",
     "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",

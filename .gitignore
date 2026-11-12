@@ -5,3 +5,6 @@ out
 next-env.d.ts
 .env*.local
 data/raw
+test-results/
+playwright-report/
+blob-report/
